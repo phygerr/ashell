@@ -78,10 +78,16 @@ pub struct ConfigFile {
     pub light_theme_name: String,
     #[serde(default)]
     pub dark_theme_name: String,
+    #[serde(default = "default_locale")]
+    pub locale: String,
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: f32,
     #[serde(default)]
     pub sessions: Vec<Session>,
+}
+
+fn default_locale() -> String {
+    "system".to_string()
 }
 
 fn default_terminal_font_size() -> f32 {
@@ -142,6 +148,18 @@ impl ConfigStore {
 
     pub fn dark_theme_name(&self) -> &str {
         &self.cache.dark_theme_name
+    }
+
+    pub fn locale(&self) -> &str {
+        if self.cache.locale.is_empty() {
+            "system"
+        } else {
+            &self.cache.locale
+        }
+    }
+
+    pub fn set_locale(&mut self, locale: &str) {
+        self.cache.locale = locale.to_string();
     }
 
     pub fn terminal_font_size(&self) -> f32 {
