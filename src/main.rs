@@ -147,6 +147,7 @@ struct Ashell {
     ssh_auth_method: AuthMethod,
     editing_session_id: Option<String>,
     follow_system_theme: bool,
+    theme_mode: ThemeMode,
     light_theme_name: SharedString,
     dark_theme_name: SharedString,
     terminal_font_size: f32,
@@ -252,6 +253,12 @@ impl Ashell {
             } else {
                 config.follow_system_theme()
             };
+
+        let theme_mode = match config.theme_mode() {
+            "light" => ThemeMode::Light,
+            "dark" => ThemeMode::Dark,
+            _ => ThemeMode::Light,
+        };
         let light_theme_name = if config.light_theme_name().is_empty() {
             default_light_theme_name
         } else {
@@ -289,6 +296,7 @@ impl Ashell {
             ssh_auth_method: AuthMethod::Password,
             editing_session_id: None,
             follow_system_theme,
+            theme_mode,
             light_theme_name,
             dark_theme_name,
             terminal_font_size: config.terminal_font_size(),
@@ -1562,8 +1570,8 @@ impl Ashell {
 
     fn switch_theme_mode(&mut self, mode: ThemeMode, window: &mut Window, cx: &mut Context<Self>) {
         self.follow_system_theme = false;
+        self.theme_mode = mode;
         self.apply_theme_preferences(window, cx);
-        Theme::change(mode, Some(window), cx);
         self.status = format!("theme mode: {}", cx.theme().mode.name()).into();
         self.persist_theme_preferences();
         cx.notify();
@@ -1644,13 +1652,18 @@ impl Ashell {
         if self.follow_system_theme {
             Theme::sync_system_appearance(Some(window), cx);
         } else {
-            Theme::change(cx.theme().mode, Some(window), cx);
+            Theme::change(self.theme_mode, Some(window), cx);
         }
     }
 
     fn persist_theme_preferences(&mut self) {
+        let theme_mode_str = match self.theme_mode {
+            ThemeMode::Light => "light",
+            ThemeMode::Dark => "dark",
+        };
         self.config.set_theme_preferences(
             self.follow_system_theme,
+            theme_mode_str,
             self.light_theme_name.to_string(),
             self.dark_theme_name.to_string(),
         );

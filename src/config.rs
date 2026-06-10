@@ -75,6 +75,8 @@ pub struct ConfigFile {
     #[serde(default)]
     pub follow_system_theme: bool,
     #[serde(default)]
+    pub theme_mode: String,
+    #[serde(default)]
     pub light_theme_name: String,
     #[serde(default)]
     pub dark_theme_name: String,
@@ -142,6 +144,10 @@ impl ConfigStore {
         self.cache.follow_system_theme
     }
 
+    pub fn theme_mode(&self) -> &str {
+        &self.cache.theme_mode
+    }
+
     pub fn light_theme_name(&self) -> &str {
         &self.cache.light_theme_name
     }
@@ -173,10 +179,12 @@ impl ConfigStore {
     pub fn set_theme_preferences(
         &mut self,
         follow_system_theme: bool,
+        theme_mode: impl Into<String>,
         light_theme_name: impl Into<String>,
         dark_theme_name: impl Into<String>,
     ) {
         self.cache.follow_system_theme = follow_system_theme;
+        self.cache.theme_mode = theme_mode.into();
         self.cache.light_theme_name = light_theme_name.into();
         self.cache.dark_theme_name = dark_theme_name.into();
     }
