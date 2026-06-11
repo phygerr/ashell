@@ -4,7 +4,7 @@ use alacritty_terminal::{
 };
 use gpui::{
     App, Bounds, Element, ElementId, Entity, FocusHandle, Font, FontStyle, FontWeight,
-    GlobalElementId, Hsla, InputHandler, IntoElement, LayoutId, Pixels, Point, Rgba,
+    GlobalElementId, Hsla, InputHandler, IntoElement, LayoutId, Pixels, Point, Rgba, SharedString,
     StrikethroughStyle, TextRun, TextStyle, UTF16Selection, UnderlineStyle, Window, fill, point,
     px, relative, rgb,
 };
@@ -127,7 +127,7 @@ pub struct TerminalElement {
     focus_handle: FocusHandle,
     snapshot: RenderSnapshot,
     marked_text: Option<String>,
-    font_family: &'static str,
+    font_family: SharedString,
     font_size: Pixels,
     line_height: Pixels,
     cell_width: Pixels,
@@ -250,7 +250,7 @@ impl TerminalElement {
         focus_handle: FocusHandle,
         snapshot: RenderSnapshot,
         marked_text: Option<String>,
-        font_family: &'static str,
+        font_family: SharedString,
         font_size: Pixels,
         line_height: Pixels,
         cell_width: Pixels,
@@ -270,7 +270,7 @@ impl TerminalElement {
     fn base_text_style(&self, cx: &App) -> TextStyle {
         TextStyle {
             color: cx.theme().foreground,
-            font_family: self.font_family.into(),
+            font_family: self.font_family.clone(),
             font_size: self.font_size.into(),
             line_height: self.line_height.into(),
             ..Default::default()
@@ -319,7 +319,7 @@ impl TerminalElement {
             color: fg,
             background_color: None,
             font: Font {
-                family: self.font_family.into(),
+                family: self.font_family.clone(),
                 weight,
                 style,
                 ..Font::default()
@@ -514,7 +514,7 @@ impl Element for TerminalElement {
                     &[TextRun {
                         len: marked_text.len(),
                         font: Font {
-                            family: self.font_family.into(),
+                            family: self.font_family.clone(),
                             ..Font::default()
                         },
                         color: base_style.color,

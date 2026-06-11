@@ -107,6 +107,12 @@ pub struct ConfigFile {
     pub locale: String,
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: f32,
+    #[serde(default = "default_ui_font_size")]
+    pub ui_font_size: f32,
+    #[serde(default = "default_ui_font_family")]
+    pub ui_font_family: String,
+    #[serde(default = "default_terminal_font_family")]
+    pub terminal_font_family: String,
     #[serde(default)]
     pub sessions: Vec<Session>,
     #[serde(default)]
@@ -125,6 +131,20 @@ fn default_locale() -> String {
 
 fn default_terminal_font_size() -> f32 {
     13.0
+}
+
+fn default_ui_font_size() -> f32 {
+    12.0
+}
+
+pub fn default_ui_font_family() -> String {
+    // ".SystemUIFont" is a GPUI sentinel that resolves to the platform system UI font.
+    // This matches gpui-component's own Theme default.
+    ".SystemUIFont".to_string()
+}
+
+fn default_terminal_font_family() -> String {
+    "Maple Mono NF CN".to_string()
 }
 
 pub struct ConfigStore {
@@ -256,6 +276,42 @@ impl ConfigStore {
 
     pub fn set_terminal_font_size(&mut self, terminal_font_size: f32) {
         self.cache.terminal_font_size = terminal_font_size.max(10.0);
+    }
+
+    pub fn ui_font_size(&self) -> f32 {
+        if self.cache.ui_font_size <= 0.0 {
+            default_ui_font_size()
+        } else {
+            self.cache.ui_font_size
+        }
+    }
+
+    pub fn set_ui_font_size(&mut self, ui_font_size: f32) {
+        self.cache.ui_font_size = ui_font_size.max(8.0);
+    }
+
+    pub fn ui_font_family(&self) -> &str {
+        if self.cache.ui_font_family.is_empty() {
+            ".SystemUIFont"
+        } else {
+            &self.cache.ui_font_family
+        }
+    }
+
+    pub fn set_ui_font_family(&mut self, family: &str) {
+        self.cache.ui_font_family = family.to_string();
+    }
+
+    pub fn terminal_font_family(&self) -> &str {
+        if self.cache.terminal_font_family.is_empty() {
+            "Maple Mono NF CN"
+        } else {
+            &self.cache.terminal_font_family
+        }
+    }
+
+    pub fn set_terminal_font_family(&mut self, family: &str) {
+        self.cache.terminal_font_family = family.to_string();
     }
 
     pub fn get(&self, id: &str) -> Option<&Session> {
