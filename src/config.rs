@@ -70,6 +70,29 @@ impl Session {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum SavedWindowBounds {
+    Fullscreen {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+    Maximized {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+    Windowed {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConfigFile {
     #[serde(default)]
@@ -86,6 +109,12 @@ pub struct ConfigFile {
     pub terminal_font_size: f32,
     #[serde(default)]
     pub sessions: Vec<Session>,
+    #[serde(default)]
+    pub window_bounds: Option<SavedWindowBounds>,
+    #[serde(default)]
+    pub workspace_panels: Option<Vec<f32>>,
+    #[serde(default)]
+    pub body_panels: Option<Vec<f32>>,
 }
 
 fn default_locale() -> String {
@@ -187,6 +216,29 @@ impl ConfigStore {
         self.cache.theme_mode = theme_mode.into();
         self.cache.light_theme_name = light_theme_name.into();
         self.cache.dark_theme_name = dark_theme_name.into();
+    }
+
+    pub fn window_bounds(&self) -> Option<&SavedWindowBounds> {
+        self.cache.window_bounds.as_ref()
+    }
+
+    pub fn workspace_panels(&self) -> Option<&Vec<f32>> {
+        self.cache.workspace_panels.as_ref()
+    }
+
+    pub fn body_panels(&self) -> Option<&Vec<f32>> {
+        self.cache.body_panels.as_ref()
+    }
+
+    pub fn set_layout_state(
+        &mut self,
+        window_bounds: Option<SavedWindowBounds>,
+        workspace_panels: Option<Vec<f32>>,
+        body_panels: Option<Vec<f32>>,
+    ) {
+        self.cache.window_bounds = window_bounds;
+        self.cache.workspace_panels = workspace_panels;
+        self.cache.body_panels = body_panels;
     }
 
     pub fn set_terminal_font_size(&mut self, terminal_font_size: f32) {

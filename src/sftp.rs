@@ -666,7 +666,12 @@ async fn upload_paths_impl(
         (0, 1) => t!("uploaded_folder").to_string(),
         (files, 0) => t!("uploaded_n_files", files = files).to_string(),
         (0, folders) => t!("uploaded_n_folders", folders = folders).to_string(),
-        (files, folders) => t!("uploaded_files_and_folders", files = files, folders = folders).to_string(),
+        (files, folders) => t!(
+            "uploaded_files_and_folders",
+            files = files,
+            folders = folders
+        )
+        .to_string(),
     };
     Ok(summary)
 }

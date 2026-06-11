@@ -1035,7 +1035,7 @@ impl Ashell {
         window.open_dialog(cx, move |dialog: Dialog, _window, _| {
             dialog
                 .title(t!("settings").to_string())
-                .w(px(480.))
+                .w(px(560.))
                 .content({
                     let view = view.clone();
                     move |content, window, cx| {
@@ -1048,7 +1048,7 @@ impl Ashell {
                                         .gap_3()
                                         .child(
                                             div()
-                                                .w(px(180.))
+                                                .w(px(240.))
                                                 .child(t!("terminal_font_size").to_string()),
                                         )
                                         .child(Button::new("font-size-down").label("-").on_click(
@@ -1070,7 +1070,7 @@ impl Ashell {
                                     h_flex()
                                         .items_center()
                                         .gap_3()
-                                        .child(div().w(px(180.)).child(t!("language").to_string()))
+                                        .child(div().w(px(240.)).child(t!("language").to_string()))
                                         .child(
                                             Button::new("language-dropdown")
                                                 .small()
@@ -1145,6 +1145,24 @@ impl Ashell {
                                         ),
                                 )
                                 .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_3()
+                                        .child(
+                                            div().w(px(240.)).child(t!("reset_layout").to_string()),
+                                        )
+                                        .child(
+                                            Button::new("reset-layout")
+                                                .label(t!("reset").to_string())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, window, cx| {
+                                                        this.reset_layout(window, cx);
+                                                    },
+                                                )),
+                                        ),
+                                )
+                                .child(
                                     div()
                                         .text_size(px(12.))
                                         .text_color(cx.theme().muted_foreground)
@@ -1154,6 +1172,17 @@ impl Ashell {
                     }
                 })
         });
+    }
+
+    fn reset_layout(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.config.set_layout_state(None, None, None);
+        let _ = self.config.save();
+
+        self.workspace_panels = cx.new(|_| gpui_component::resizable::ResizableState::default());
+        self.body_panels = cx.new(|_| gpui_component::resizable::ResizableState::default());
+
+        self.status = t!("reset_layout_success").into();
+        cx.notify();
     }
 
     fn set_ssh_auth_method(&mut self, method: AuthMethod, cx: &mut Context<Self>) {
@@ -3194,7 +3223,7 @@ impl Render for Ashell {
                     .with_state(&self.workspace_panels)
                     .child(
                         resizable_panel()
-                            .size(px(SIDEBAR_WIDTH))
+                            .size(px(self.config.workspace_panels().and_then(|s| s.first().copied()).unwrap_or(SIDEBAR_WIDTH)))
                             .size_range(px(240.)..px(520.))
                             .flex_none()
                             .child(self.sidebar(cx)),
@@ -3349,7 +3378,7 @@ impl Render for Ashell {
                                         )
                                         .child(
                                             resizable_panel()
-                                                .size(px(248.))
+                                                .size(px(self.config.body_panels().and_then(|s| s.get(1).copied()).unwrap_or(248.0)))
                                                 .size_range(px(180.)..px(420.))
                                                 .child(self.render_sftp_panel(window, cx)),
                                         ),
@@ -3576,7 +3605,38 @@ fn open_main_window(cx: &mut App) {
         window_options.icon = Some(std::sync::Arc::new(img.into_rgba8()));
     }
 
-    if let Some(display) = cx.displays().first().cloned() {
+    let config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
+    if let Some(bounds) = config.window_bounds() {
+        window_options.window_bounds = Some(match bounds {
+            crate::config::SavedWindowBounds::Fullscreen {
+                x,
+                y,
+                width,
+                height,
+            } => gpui::WindowBounds::Fullscreen(Bounds::new(
+                point(px(*x), px(*y)),
+                size(px(*width), px(*height)),
+            )),
+            crate::config::SavedWindowBounds::Maximized {
+                x,
+                y,
+                width,
+                height,
+            } => gpui::WindowBounds::Maximized(Bounds::new(
+                point(px(*x), px(*y)),
+                size(px(*width), px(*height)),
+            )),
+            crate::config::SavedWindowBounds::Windowed {
+                x,
+                y,
+                width,
+                height,
+            } => gpui::WindowBounds::Windowed(Bounds::new(
+                point(px(*x), px(*y)),
+                size(px(*width), px(*height)),
+            )),
+        });
+    } else if let Some(display) = cx.displays().first().cloned() {
         let display_bounds = display.bounds();
         let width = display_bounds.size.width * 0.8;
         let height = display_bounds.size.height * 0.9;
@@ -3599,6 +3659,49 @@ fn open_main_window(cx: &mut App) {
         window.set_window_title("ashell");
         Theme::sync_system_appearance(Some(window), cx);
         let view = cx.new(|cx| Ashell::new(window, cx));
+
+        let workspace_panels_clone = view.read(cx).workspace_panels.clone();
+        let body_panels_clone = view.read(cx).body_panels.clone();
+        window.on_window_should_close(cx, move |window: &mut gpui::Window, cx: &mut gpui::App| {
+            let mut config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
+            let current_bounds = window.window_bounds();
+            let saved_bounds = match current_bounds {
+                gpui::WindowBounds::Fullscreen(b) => crate::config::SavedWindowBounds::Fullscreen {
+                    x: b.origin.x.into(),
+                    y: b.origin.y.into(),
+                    width: b.size.width.into(),
+                    height: b.size.height.into(),
+                },
+                gpui::WindowBounds::Maximized(b) => crate::config::SavedWindowBounds::Maximized {
+                    x: b.origin.x.into(),
+                    y: b.origin.y.into(),
+                    width: b.size.width.into(),
+                    height: b.size.height.into(),
+                },
+                gpui::WindowBounds::Windowed(b) => crate::config::SavedWindowBounds::Windowed {
+                    x: b.origin.x.into(),
+                    y: b.origin.y.into(),
+                    width: b.size.width.into(),
+                    height: b.size.height.into(),
+                },
+            };
+            let workspace_sizes: Vec<f32> = workspace_panels_clone
+                .read(cx)
+                .sizes()
+                .iter()
+                .map(|s| s.into())
+                .collect();
+            let body_sizes: Vec<f32> = body_panels_clone
+                .read(cx)
+                .sizes()
+                .iter()
+                .map(|s| s.into())
+                .collect();
+            config.set_layout_state(Some(saved_bounds), Some(workspace_sizes), Some(body_sizes));
+            let _ = config.save();
+            true
+        });
+
         cx.new(|cx| Root::new(view, window, cx))
     })
     .expect("failed to open window");
