@@ -819,12 +819,21 @@ impl Ashell {
         self.show_ssh_dialog(window, cx);
     }
 
-    fn terminal_cell_width(&self) -> f32 {
-        (self.terminal_font_size * 0.646).max(6.0)
+    fn terminal_cell_width(&self, window: &Window) -> f32 {
+        let font_id = window.text_system().resolve_font(&gpui::Font {
+            family: self.terminal_font_family.clone(),
+            ..gpui::Font::default()
+        });
+        window
+            .text_system()
+            .advance(font_id, px(self.terminal_font_size), 'm')
+            .map(|a| a.width.as_f32())
+            .unwrap_or(self.terminal_font_size * 0.646)
+            .max(6.0)
     }
 
     fn terminal_line_height(&self) -> f32 {
-        (self.terminal_font_size * 1.385).max(self.terminal_font_size + 2.0)
+        (self.terminal_font_size * 1.3).max(self.terminal_font_size + 2.0)
     }
 
     fn change_terminal_font_size(&mut self, delta: f32, cx: &mut Context<Self>) {
@@ -2783,17 +2792,18 @@ impl Ashell {
         &self,
         range_utf16: Range<usize>,
         element_bounds: Bounds<Pixels>,
+        window: &Window,
     ) -> Option<Bounds<Pixels>> {
         let snapshot = self.active_snapshot()?;
         let cursor = snapshot.cursor?;
         let x = element_bounds.origin.x
-            + px(self.terminal_cell_width()) * cursor.col as f32
-            + px(self.terminal_cell_width()) * range_utf16.start as f32;
+            + px(self.terminal_cell_width(window)) * cursor.col as f32
+            + px(self.terminal_cell_width(window)) * range_utf16.start as f32;
         let y = element_bounds.origin.y + px(self.terminal_line_height()) * cursor.row as f32;
         Some(Bounds::new(
             point(x, y),
             size(
-                px(self.terminal_cell_width()),
+                px(self.terminal_cell_width(window)),
                 px(self.terminal_line_height()),
             ),
         ))
@@ -2807,7 +2817,7 @@ impl Ashell {
     ) {
         self.focus_handle.focus(window, cx);
         if event.button == MouseButton::Left {
-            self.begin_terminal_selection(event, cx);
+            self.begin_terminal_selection(event, window, cx);
         }
         cx.notify();
     }
@@ -2849,7 +2859,7 @@ impl Ashell {
         }
     }
 
-    fn begin_terminal_selection(&mut self, event: &MouseDownEvent, cx: &mut Context<Self>) {
+    fn begin_terminal_selection(&mut self, event: &MouseDownEvent, window: &Window, cx: &mut Context<Self>) {
         let click_count = event.click_count.max(1);
         let selection_type = match click_count {
             1 => SelectionType::Simple,
@@ -2857,7 +2867,7 @@ impl Ashell {
             3 => SelectionType::Lines,
             _ => SelectionType::Simple,
         };
-        let Some((row, col, side)) = self.terminal_grid_point_and_side(event.position) else {
+        let Some((row, col, side)) = self.terminal_grid_point_and_side(event.position, window) else {
             return;
         };
         let Some(active_id) = self.active_tab.clone() else {
@@ -2873,13 +2883,13 @@ impl Ashell {
     fn on_terminal_mouse_move(
         &mut self,
         event: &MouseMoveEvent,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if !self.terminal_selecting || event.pressed_button != Some(MouseButton::Left) {
             return;
         }
-        let Some((row, col, side)) = self.terminal_grid_point_and_side(event.position) else {
+        let Some((row, col, side)) = self.terminal_grid_point_and_side(event.position, window) else {
             return;
         };
         let Some(active_id) = self.active_tab.clone() else {
@@ -2894,7 +2904,7 @@ impl Ashell {
     fn on_terminal_mouse_up(
         &mut self,
         _event: &MouseUpEvent,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.terminal_selecting = false;
@@ -2904,6 +2914,7 @@ impl Ashell {
     fn terminal_grid_point_and_side(
         &self,
         position: Point<Pixels>,
+        window: &Window,
     ) -> Option<(usize, usize, Side)> {
         let bounds = self.terminal_bounds?;
         if !bounds.contains(&position) {
@@ -2911,7 +2922,7 @@ impl Ashell {
         }
         let local_x = (position.x - bounds.origin.x).max(px(0.));
         let local_y = (position.y - bounds.origin.y).max(px(0.));
-        let cell_width = px(self.terminal_cell_width());
+        let cell_width = px(self.terminal_cell_width(window));
         let line_height = px(self.terminal_line_height());
         let snapshot = self.active_snapshot()?;
         let max_col = snapshot.cols.saturating_sub(1);
@@ -3084,9 +3095,9 @@ impl Ashell {
             .map(|size| size.as_f32())
             .unwrap_or(viewport.height.as_f32() - TAB_BAR_HEIGHT - 248.0);
         let width = (viewport.width.as_f32() - sidebar_width - TERMINAL_PADDING_X - 8.0)
-            .max(self.terminal_cell_width());
+            .max(self.terminal_cell_width(window));
         let height = (terminal_height - TERMINAL_PADDING_Y).max(self.terminal_line_height());
-        let cols = (width / self.terminal_cell_width()).floor().max(1.0) as u16;
+        let cols = (width / self.terminal_cell_width(window)).floor().max(1.0) as u16;
         let rows = (height / self.terminal_line_height()).floor().max(1.0) as u16;
 
         for tab in &mut self.tabs {
@@ -4384,7 +4395,7 @@ impl Render for Ashell {
                                                                     self.terminal_font_family.clone(),
                                                                     px(self.terminal_font_size),
                                                                     px(self.terminal_line_height()),
-                                                                    px(self.terminal_cell_width()),
+                                                                    px(self.terminal_cell_width(window)),
                                                                 ),
                                                             )
                                                             .vertical_scrollbar(&self.terminal_scrollbar)
