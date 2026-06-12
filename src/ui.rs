@@ -991,11 +991,16 @@ impl Ashell {
                             .text_color(cx.theme().muted_foreground)
                             .child({
                                 if let Some(kind) = self.active_kind() {
-                                    let kind_str = match kind {
+                                    match kind {
                                         TabKind::Local => t!("local_terminal").to_string(),
-                                        TabKind::Ssh => "ssh".to_string(),
-                                    };
-                                    format!("{} / {}", kind_str, self.active_title())
+                                        TabKind::Ssh => {
+                                            if let Some((_, session)) = self.active_ssh_session() {
+                                                format!("ssh / {}", session.name)
+                                            } else {
+                                                "ssh".to_string()
+                                            }
+                                        }
+                                    }
                                 } else {
                                     self.active_title()
                                 }
