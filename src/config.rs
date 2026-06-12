@@ -125,6 +125,8 @@ pub struct ConfigFile {
     pub body_panels: Option<Vec<f32>>,
     #[serde(default)]
     pub transfers: Vec<crate::terminal::Transfer>,
+    #[serde(default)]
+    pub show_hidden_files: bool,
 }
 
 fn default_locale() -> String {
@@ -329,6 +331,14 @@ impl ConfigStore {
 
     pub fn set_terminal_font_family(&mut self, family: &str) {
         self.cache.terminal_font_family = family.to_string();
+    }
+
+    pub fn show_hidden_files(&self) -> bool {
+        self.cache.show_hidden_files
+    }
+
+    pub fn set_show_hidden_files(&mut self, val: bool) {
+        self.cache.show_hidden_files = val;
     }
 
     pub fn get(&self, id: &str) -> Option<&Session> {

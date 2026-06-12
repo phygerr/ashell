@@ -338,7 +338,7 @@ impl Ashell {
             sftp_creating_folder: false,
             sftp_new_folder_input,
             sftp_delete_scroll_handle: gpui::ScrollHandle::new(),
-            show_hidden_files: false,
+            show_hidden_files: config.show_hidden_files(),
             transfers: config.transfers(),
             show_transfers_dialog: false,
             system_status: None,
@@ -3554,6 +3554,8 @@ impl Ashell {
                         .tab_stop(false)
                         .on_click(cx.listener(|this, checked, _, cx| {
                             this.show_hidden_files = *checked;
+                            this.config.set_show_hidden_files(*checked);
+                            let _ = this.config.save();
                             cx.notify();
                         })),
                 )
