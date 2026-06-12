@@ -1483,7 +1483,11 @@ impl Render for Ashell {
                 .child(resizable_panel().child(self.render_terminal_panel(terminal_snapshot, cx)))
                 .child(
                     resizable_panel()
-                        .size(px(328.))
+                        .size(px(self
+                            .config
+                            .body_panels()
+                            .and_then(|s| s.get(1).copied())
+                            .unwrap_or(328.)))
                         .size_range(px(260.)..px(1200.))
                         .child(monitoring_contents)
                 )
