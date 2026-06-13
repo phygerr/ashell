@@ -19,7 +19,7 @@ use rust_i18n::t;
 
 use crate::{
     Ashell,
-    config::AuthMethod,
+    session::config::AuthMethod,
     system::format_bytes,
 };
 

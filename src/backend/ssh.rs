@@ -14,7 +14,7 @@ use russh::{
 use tokio::sync::mpsc;
 
 use crate::{
-    config::{AuthMethod, Session},
+    session::config::{AuthMethod, Session},
     system::{SystemSnapshot, remote_snapshot_from_kv},
     terminal::{BackendCommand, BackendEvent, BackendTx},
 };

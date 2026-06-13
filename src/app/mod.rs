@@ -1,3 +1,9 @@
+pub mod constants;
+pub mod dialogs;
+pub mod startup;
+pub mod theme;
+pub mod ui;
+
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -22,11 +28,11 @@ use rust_i18n::t;
 use tokio::runtime::Runtime;
 
 use crate::{
-    config::{AuthMethod, ConfigStore},
     sftp::SftpHandle,
+    session::config::{AuthMethod, ConfigStore},
     system::{SystemSampler, SystemSnapshot},
     terminal::{self, BackendCommand, BackendEvent, TabKind, TerminalTab},
-    ssh_terminal,
+    backend::ssh,
 };
 
 #[derive(Clone, Debug)]
@@ -638,6 +644,8 @@ impl Ashell {
                             self.focused_pane_path = vec![];
                             self.active_tab = None;
                             self.active_group = None;
+                            self.tab_groups.clear();
+                            self.tabs.clear();
                             self.system_tab_id = None;
                             self.cpu_history.clear();
                             self.net_rx_history.clear();
@@ -799,7 +807,7 @@ impl Ashell {
         let events = self.events_tx.clone();
         let tab_id = tab_id.clone();
         self.runtime.spawn(async move {
-            match ssh_terminal::sample_remote_system(session).await {
+            match ssh::sample_remote_system(session).await {
                 Ok(snapshot) => {
                     let _ = events.send(BackendEvent::RemoteSystem { tab_id, snapshot });
                 }

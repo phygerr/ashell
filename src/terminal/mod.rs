@@ -1,3 +1,6 @@
+pub mod element;
+pub mod input;
+
 use std::sync::mpsc::Sender;
 
 use alacritty_terminal::{
@@ -10,7 +13,7 @@ use alacritty_terminal::{
 };
 use gpui::Keystroke;
 
-use crate::config::Session;
+use crate::session::config::Session;
 use crate::sftp::{PreviewData, RemoteEntry};
 use crate::system::SystemSnapshot;
 

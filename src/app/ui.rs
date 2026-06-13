@@ -22,12 +22,12 @@ use gpui_component::{
 use rust_i18n::t;
 
 use crate::{
-    Ashell, PaneLayout, SIDEBAR_WIDTH, TERMINAL_KEY_CONTEXT,
-    sftp_ops::is_editable_text_file,
+    Ashell, PaneLayout,
+    app::constants::{SIDEBAR_WIDTH, TERMINAL_KEY_CONTEXT},
+    sftp::ops::is_editable_text_file,
     sftp::format_mtime,
     system::format_bytes,
-    terminal::{TabKind, TerminalTab},
-    terminal_element,
+    terminal::{self, TabKind, TerminalTab},
 };
 
 impl Ashell {
@@ -1574,7 +1574,7 @@ impl Ashell {
                         this.focus_pane_with_id(tab_id_clone2.clone());
                         cx.notify();
                     }))
-                    .child(terminal_element::TerminalElement::new(
+                    .child(terminal::element::TerminalElement::new(
                         cx.entity(),
                         focus_handle,
                         snapshot,

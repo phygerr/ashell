@@ -1,4 +1,5 @@
-use gpui::{Anchor, Context, IntoElement, SharedString, Window, px};
+use anyhow::{Context as _, Result};
+use gpui::{Anchor, App, Context, IntoElement, SharedString, Window, px};
 use gpui_component::{
     ActiveTheme as _, IconName, Sizable as _, Theme, ThemeMode, ThemeRegistry,
     button::{Button, ButtonVariants as _},
@@ -7,6 +8,33 @@ use gpui_component::{
 use rust_i18n::t;
 
 use crate::Ashell;
+
+pub(crate) const EMBEDDED_THEME_JSONS: &[&str] = &[
+    include_str!("../../assets/themes/matrix.json"),
+    include_str!("../../assets/themes/tokyonight.json"),
+    include_str!("../../assets/themes/gruvbox.json"),
+    include_str!("../../assets/themes/solarized.json"),
+];
+
+pub(crate) fn load_fonts(cx: &mut App) -> Result<()> {
+    let regular =
+        std::borrow::Cow::Borrowed(include_bytes!("../../assets/fonts/MapleMono-NF-CN-Regular.ttf").as_slice());
+    let bold = std::borrow::Cow::Borrowed(include_bytes!("../../assets/fonts/MapleMono-NF-CN-Bold.ttf").as_slice());
+    cx.text_system()
+        .add_fonts(vec![regular, bold])
+        .context("load Maple Mono NF CN fonts")?;
+    set_theme_font_names(cx.global_mut::<Theme>(), ".SystemUIFont");
+    Ok(())
+}
+
+pub(crate) fn load_embedded_themes(cx: &mut App) {
+    let registry = ThemeRegistry::global_mut(cx);
+    for theme_json in EMBEDDED_THEME_JSONS {
+        if let Err(err) = registry.load_themes_from_str(theme_json) {
+            tracing::warn!("failed to load embedded theme: {err:#}");
+        }
+    }
+}
 
 pub(crate) fn set_theme_font_names(theme: &mut Theme, ui_font_family: &str) {
     theme.font_family = ui_font_family.into();

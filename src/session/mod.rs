@@ -1,3 +1,5 @@
+pub mod config;
+
 use gpui::{
     App, AppContext as _, Context, Entity, KeyDownEvent, MouseButton,
     MouseDownEvent, MouseMoveEvent, SharedString, Window, px,
@@ -9,21 +11,20 @@ use gpui_component::{
 use rust_i18n::t;
 use uuid::Uuid;
 
+use self::config::{AuthMethod, Session};
+
 use crate::{
     Ashell, ConnectionProgress, PaneLayout, SelectorEntry, TabGroup,
-    config::{AuthMethod, Session},
-    local_terminal,
+    backend::{local, ssh},
     sftp,
-    ssh_terminal,
     terminal::{BackendCommand, RenderSnapshot, TabKind, TerminalTab},
-    DEFAULT_COLS, DEFAULT_ROWS, SIDEBAR_WIDTH, TAB_BAR_HEIGHT, TERMINAL_PADDING_X,
-    TERMINAL_PADDING_Y,
+    app::constants::{DEFAULT_COLS, DEFAULT_ROWS, SIDEBAR_WIDTH, TAB_BAR_HEIGHT, TERMINAL_PADDING_X, TERMINAL_PADDING_Y},
 };
 
 impl Ashell {
     pub(crate) fn open_local(&mut self, cx: &mut Context<Self>) {
         let id = Uuid::new_v4().to_string();
-        match local_terminal::spawn_local_terminal(
+        match local::spawn_local_terminal(
             id.clone(),
             DEFAULT_COLS,
             DEFAULT_ROWS,
@@ -221,7 +222,7 @@ impl Ashell {
         if let Err(err) = self.config.save() {
             tracing::warn!("failed to save UI font family: {err:#}");
         }
-        crate::theme::set_theme_font_names(Theme::global_mut(cx), &self.ui_font_family);
+        crate::app::theme::set_theme_font_names(Theme::global_mut(cx), &self.ui_font_family);
         cx.notify();
         window.refresh();
     }
@@ -346,7 +347,7 @@ impl Ashell {
 
     pub(crate) fn open_ssh_session(&mut self, session: Session, cx: &mut Context<Self>) {
         let id = Uuid::new_v4().to_string();
-        let backend = ssh_terminal::spawn_ssh_terminal(
+        let backend = ssh::spawn_ssh_terminal(
             self.runtime.handle(),
             id.clone(),
             session.clone(),
@@ -528,6 +529,8 @@ impl Ashell {
             self.focused_pane_path = vec![];
             self.active_tab = None;
             self.active_group = None;
+            self.tab_groups.clear();
+            self.tabs.clear();
             self.system_tab_id = None;
             self.cpu_history.clear();
             self.net_rx_history.clear();
@@ -718,7 +721,7 @@ impl Ashell {
         let new_id = Uuid::new_v4().to_string();
         let mut tab = match current_tab.kind {
             TabKind::Local => {
-                match local_terminal::spawn_local_terminal(
+                match local::spawn_local_terminal(
                     new_id.clone(),
                     DEFAULT_COLS,
                     DEFAULT_ROWS,
@@ -743,7 +746,7 @@ impl Ashell {
                     cx.notify();
                     return;
                 };
-                let backend = ssh_terminal::spawn_ssh_terminal(
+                let backend = ssh::spawn_ssh_terminal(
                     self.runtime.handle(),
                     new_id.clone(),
                     session.clone(),

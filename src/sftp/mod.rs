@@ -1,3 +1,5 @@
+pub mod ops;
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -27,7 +29,7 @@ use zip::read::ZipArchive;
 use rust_i18n::t;
 
 use crate::{
-    config::{AuthMethod, Session},
+    session::config::{AuthMethod, Session},
     terminal::BackendEvent,
 };
 
@@ -496,7 +498,7 @@ async fn run_sftp(
             }
             SftpCommand::EditFile { remote_path } => {
                 let id = uuid::Uuid::new_v4().to_string();
-                let config = crate::config::ConfigStore::load().unwrap();
+                let config = crate::session::config::ConfigStore::load().unwrap();
                 let tmp_dir = config.tmp_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
                 let base = base_name(&remote_path);
                 let local_path = tmp_dir.join(format!("{}-{}", id, base));
