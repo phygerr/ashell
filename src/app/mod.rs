@@ -47,6 +47,7 @@ pub(crate) struct TabGroup {
     pub(crate) id: String,
     pub(crate) title: String,
     pub(crate) pane_root: PaneLayout,
+    pub(crate) sftp: Option<crate::terminal::SftpUiState>,
 }
 
 impl PaneLayout {
@@ -253,8 +254,8 @@ pub(crate) struct Ashell {
     pub(crate) last_theme_sync: Instant,
 
     pub(crate) system_tab_id: Option<String>,
-    pub(crate) dedicated_sftp_handle: Option<SftpHandle>,
-    pub(crate) dedicated_sftp_state: Option<terminal::SftpUiState>,
+    pub(crate) sftp_handles: std::collections::HashMap<String, crate::sftp::SftpHandle>,
+    
     pub(crate) remote_sample_in_flight: bool,
     pub(crate) runtime: Runtime,
     pub(crate) events_rx: mpsc::Receiver<BackendEvent>,
@@ -431,8 +432,8 @@ impl Ashell {
             last_theme_sync: Instant::now(),
 
             system_tab_id: None,
-            dedicated_sftp_handle: None,
-            dedicated_sftp_state: None,
+            sftp_handles: std::collections::HashMap::new(),
+            
             remote_sample_in_flight: false,
             runtime: Runtime::new().expect("create tokio runtime"),
             events_rx,
@@ -473,7 +474,7 @@ impl Ashell {
                     if !name.is_empty() {
                         let base_path = self.sftp_path_input.read(cx).text().to_string();
                         let path = crate::sftp::join_remote(&base_path, &name);
-                        if let Some(handle) = self.dedicated_sftp_handle.as_ref() {
+                        if let Some(handle) = self.active_sftp_handle() {
                             let _ = handle.commands.send(crate::sftp::SftpCommand::CreateDir(path));
                         }
                     }
@@ -563,27 +564,35 @@ impl Ashell {
                     }
                 }
                 BackendEvent::SftpEntries {
-                    tab_id: _,
+                    tab_id,
                     path,
                     entries,
                 } => {
-                    if let Some(sftp) = self.dedicated_sftp_state.as_mut() {
-                        sftp.current_path = path;
-                        sftp.entries = entries;
-                        self.pending_sftp_path_sync = Some(sftp.current_path.clone());
+                    if let Some(group) = self.tab_groups.iter_mut().find(|g| g.id == tab_id) {
+                        if let Some(sftp) = group.sftp.as_mut() {
+                            sftp.current_path = path;
+                            sftp.entries = entries;
+                            self.pending_sftp_path_sync = Some(sftp.current_path.clone());
+                        }
                     }
                 }
-                BackendEvent::SftpPreview { tab_id: _, preview } => {
-                    if let Some(sftp) = self.dedicated_sftp_state.as_mut() {
-                        sftp.selected_path = Some(preview.path.clone());
-                        sftp.preview = Some(preview);
+                BackendEvent::SftpPreview { tab_id, preview } => {
+                    if let Some(group) = self.tab_groups.iter_mut().find(|g| g.id == tab_id) {
+                        if let Some(sftp) = group.sftp.as_mut() {
+                            sftp.selected_path = Some(preview.path.clone());
+                            sftp.preview = Some(preview);
+                        }
                     }
                 }
-                BackendEvent::SftpStatus { tab_id: _, text } => {
-                    if let Some(sftp) = self.dedicated_sftp_state.as_mut() {
-                        sftp.status = text.clone();
+                BackendEvent::SftpStatus { tab_id, text } => {
+                    if let Some(group) = self.tab_groups.iter_mut().find(|g| g.id == tab_id) {
+                        if let Some(sftp) = group.sftp.as_mut() {
+                            sftp.status = text.clone();
+                        }
                     }
-                    self.status = text.into();
+                    if self.active_group.as_ref() == Some(&tab_id) {
+                        self.status = text.into();
+                    }
                 }
                 BackendEvent::RemoteSystem { tab_id, snapshot } => {
                     self.remote_sample_in_flight = false;
@@ -651,10 +660,9 @@ impl Ashell {
                             self.net_rx_history.clear();
                             self.net_tx_history.clear();
                             self.system_status = None;
-                            if let Some(handle) = self.dedicated_sftp_handle.take() {
+                            if let Some(handle) = self.sftp_handles.remove(&tab_id) {
                                 handle.close();
                             }
-                            self.dedicated_sftp_state = None;
                             return changed;
                         }
                         // Reassign system_tab_id if the closed tab was monitored
@@ -737,9 +745,11 @@ impl Ashell {
                     );
                     transfers_changed = true;
                 }
-                BackendEvent::SftpHome { tab_id: _, home } => {
-                    if let Some(sftp) = self.dedicated_sftp_state.as_mut() {
-                        sftp.home_dir = home;
+                BackendEvent::SftpHome { tab_id, home } => {
+                    if let Some(group) = self.tab_groups.iter_mut().find(|g| g.id == tab_id) {
+                        if let Some(sftp) = group.sftp.as_mut() {
+                            sftp.home_dir = home;
+                        }
                     }
                 }
                 BackendEvent::TerminalTitleChanged { tab_id, title } => {

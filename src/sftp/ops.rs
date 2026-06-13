@@ -22,15 +22,20 @@ pub(crate) fn is_editable_text_file(filename: &str) -> bool {
 
 impl Ashell {
     pub(crate) fn active_sftp(&self) -> Option<&terminal::SftpUiState> {
-        self.dedicated_sftp_state.as_ref()
+        self.active_group.as_ref()
+            .and_then(|id| self.tab_groups.iter().find(|g| &g.id == id))
+            .and_then(|g| g.sftp.as_ref())
     }
 
     pub(crate) fn active_sftp_mut(&mut self) -> Option<&mut terminal::SftpUiState> {
-        self.dedicated_sftp_state.as_mut()
+        let active_id = self.active_group.clone()?;
+        self.tab_groups.iter_mut().find(|g| g.id == active_id)
+            .and_then(|g| g.sftp.as_mut())
     }
 
     pub(crate) fn active_sftp_handle(&self) -> Option<&SftpHandle> {
-        self.dedicated_sftp_handle.as_ref()
+        self.active_group.as_ref()
+            .and_then(|id| self.sftp_handles.get(id))
     }
 
     pub(crate) fn navigate_sftp(&mut self, path: String, cx: &mut Context<Self>) {
@@ -128,7 +133,7 @@ impl Ashell {
         let Some(menu) = self.sftp_context_menu.take() else {
             return;
         };
-        if let Some(handle) = self.dedicated_sftp_handle.as_ref() {
+        if let Some(handle) = self.active_sftp_handle() {
             handle.edit_file(menu.remote_path);
         }
         cx.notify();

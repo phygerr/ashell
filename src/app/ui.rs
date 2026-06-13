@@ -1429,8 +1429,11 @@ impl Ashell {
                                             } else {
                                                 title.clone()
                                             };
-                                            let close_id =
-                                                pane_ids.first().cloned().unwrap_or_default();
+                                            let close_id = if self.active_group.as_ref() == Some(&gid) {
+                                                self.active_tab.clone().unwrap_or_else(|| pane_ids.first().cloned().unwrap_or_default())
+                                            } else {
+                                                pane_ids.first().cloned().unwrap_or_default()
+                                            };
                                             let dot_color = pane_ids
                                                 .first()
                                                 .and_then(|id| {

@@ -44,6 +44,7 @@ impl Ashell {
                     id: group_id.clone(),
                     title: "Local".to_string(),
                     pane_root: PaneLayout::Single(id),
+                    sftp: None,
                 });
                 self.active_group = Some(group_id);
                 self.tabs_scroll_handle.scroll_to_item(self.tabs.len() - 1);
@@ -369,8 +370,17 @@ impl Ashell {
             id: group_id.clone(),
             title: session.name.clone(),
             pane_root: PaneLayout::Single(id.clone()),
+            sftp: Some(crate::terminal::SftpUiState {
+                current_path: "/".into(),
+                status: rust_i18n::t!("sftp_connecting").to_string(),
+                entries: Vec::new(),
+                selected_path: None,
+                preview: None,
+                selected_entries: std::collections::HashSet::new(),
+                home_dir: "/".into(),
+            }),
         });
-        self.active_group = Some(group_id);
+        self.active_group = Some(group_id.clone());
         self.tabs_scroll_handle.scroll_to_item(self.tabs.len() - 1);
         if let Some(session_id) = self.active_session_id() {
             if let Some(index) = self.config.sessions().iter().position(|s| s.id == session_id) {
@@ -378,17 +388,13 @@ impl Ashell {
             }
         }
         cx.notify();
-        let dedicated_sftp = sftp::spawn_sftp(
+        let sftp_handle = crate::sftp::spawn_sftp(
             self.runtime.handle(),
-            id.clone(),
+            group_id.clone(),
             session,
             self.events_tx.clone(),
         );
-        self.dedicated_sftp_handle = Some(dedicated_sftp);
-        self.dedicated_sftp_state = Some(crate::terminal::SftpUiState {
-            status: t!("sftp_connecting").to_string(),
-            ..Default::default()
-        });
+        self.sftp_handles.insert(group_id.clone(), sftp_handle);
         self.active_tab = Some(id.clone());
         self.pending_sftp_path_sync = Some("/".into());
         self.connection_progress = Some(ConnectionProgress {
@@ -500,6 +506,30 @@ impl Ashell {
             "[close_tab] id='{}' group_panes={:?} is_group_close={}",
             id, pane_ids_str, is_group_close
         );
+
+        let was_active = self.active_tab.as_deref() == Some(id.as_str());
+        let mut next_active_id = None;
+        if was_active {
+            let tabs_in_group = group.pane_root.tab_ids();
+            if let Some(pos) = tabs_in_group.iter().position(|&s| s == id.as_str()) {
+                if pos > 0 {
+                    next_active_id = Some(tabs_in_group[pos - 1].to_string());
+                } else if pos + 1 < tabs_in_group.len() {
+                    next_active_id = Some(tabs_in_group[pos + 1].to_string());
+                }
+            }
+            if next_active_id.is_none() {
+                // Find next group's active tab
+                let all_groups = &self.tab_groups;
+                if let Some(pos) = all_groups.iter().position(|g| g.id == group.id) {
+                    if pos > 0 {
+                        next_active_id = all_groups[pos - 1].pane_root.tab_ids().first().copied().map(String::from);
+                    } else if pos + 1 < all_groups.len() {
+                        next_active_id = all_groups[pos + 1].pane_root.tab_ids().first().copied().map(String::from);
+                    }
+                }
+            }
+        }
         if is_group_close {
             // Close all tabs in the group
             let tab_ids: Vec<String> = group.pane_root.tab_ids().iter().map(|s| s.to_string()).collect();
@@ -508,6 +538,9 @@ impl Ashell {
                     self.tabs[ix].backend.send(BackendCommand::Close);
                     self.tabs.retain(|t| t.id != *tab_id);
                 }
+            }
+            if let Some(handle) = self.sftp_handles.remove(&group.id) {
+                handle.close();
             }
             self.tab_groups.remove(group_ix.unwrap());
             self.pane_root.remove_tab(&id);
@@ -536,10 +569,9 @@ impl Ashell {
             self.net_rx_history.clear();
             self.net_tx_history.clear();
             self.system_status = None;
-            if let Some(handle) = self.dedicated_sftp_handle.take() {
+            for (_, handle) in self.sftp_handles.drain() {
                 handle.close();
             }
-            self.dedicated_sftp_state = None;
             cx.notify();
             return;
         }
@@ -551,7 +583,8 @@ impl Ashell {
                 self.system_status = Some("monitored session closed".to_string().into());
             }
         }
-        let was_active = self.active_tab.as_deref() == Some(id.as_str());
+
+
         if was_active
             || self
                 .active_tab
@@ -559,10 +592,16 @@ impl Ashell {
                 .is_some_and(|active_id| !self.tabs.iter().any(|tab| &tab.id == active_id))
         {
             // Activate next available pane
-            let first_id = self.pane_root.tab_ids().first().copied().map(String::from)
-                .or_else(|| self.tabs.first().map(|t| t.id.clone()));
-            if let Some(new_id) = first_id {
+            let new_id = next_active_id.or_else(|| {
+                self.pane_root.tab_ids().first().copied().map(String::from)
+                    .or_else(|| self.tabs.first().map(|t| t.id.clone()))
+            });
+            if let Some(new_id) = new_id {
                 self.active_tab = Some(new_id.clone());
+                if let Some(g) = self.tab_groups.iter().find(|g| g.pane_root.contains(&new_id)) {
+                    self.active_group = Some(g.id.clone());
+                    self.pane_root = g.pane_root.clone();
+                }
                 self.focus_pane_with_id(new_id);
             }
         } else {
@@ -754,6 +793,13 @@ impl Ashell {
                     DEFAULT_ROWS,
                     self.events_tx.clone(),
                 );
+                let sftp_handle = crate::sftp::spawn_sftp(
+                    self.runtime.handle(),
+                    new_id.clone(),
+                    session.clone(),
+                    self.events_tx.clone(),
+                );
+                self.sftp_handles.insert(new_id.clone(), sftp_handle);
                 TerminalTab::new_ssh(
                     new_id.clone(),
                     &session,
