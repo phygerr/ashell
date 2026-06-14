@@ -162,6 +162,33 @@ impl Ashell {
         );
     }
 
+    pub(crate) fn pick_ssh_key_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let start_dir = directories::BaseDirs::new()
+            .map(|d| d.home_dir().join(".ssh"))
+            .unwrap_or_else(|| std::path::PathBuf::from("/"));
+
+        let file_dialog = rfd::AsyncFileDialog::new()
+            .set_directory(start_dir)
+            .pick_file();
+
+        cx.spawn_in(window, async move |this, mut cx| {
+            if let Some(file) = file_dialog.await {
+                let _ = gpui::AsyncWindowContext::update(&mut cx, |window, cx| {
+                    let _ = this.update(cx, |this, cx| {
+                        Self::set_input_value(
+                            &this.key_path_input,
+                            file.path().to_string_lossy().to_string(),
+                            window,
+                            cx,
+                        );
+                    });
+                });
+            }
+            Ok::<(), anyhow::Error>(())
+        })
+        .detach();
+    }
+
     pub(crate) fn open_new_ssh_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.reset_ssh_form(window, cx);
         self.show_ssh_dialog(window, cx);

@@ -101,7 +101,31 @@ impl Ashell {
                                     )
                                 })
                                 .when(!is_password, |this| {
-                                    this.child(Input::new(&key_path_input).tab_index(5)).child(
+                                    this.child(
+                                        h_flex()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        window.listener_for(&view, |this, _, window, cx| {
+                                                            this.pick_ssh_key_path(window, cx);
+                                                        }),
+                                                    )
+                                                    .child(Input::new(&key_path_input).tab_index(5)),
+                                            )
+                                            .child(
+                                                Button::new("clear-key-path")
+                                                    .ghost()
+                                                    .icon(IconName::Close)
+                                                    .on_click(window.listener_for(&view, |this, _, window, cx| {
+                                                        Self::set_input_value(&this.key_path_input, "", window, cx);
+                                                    }))
+                                            ),
+                                    )
+                                    .child(
                                         Input::new(&key_inline_input).h(px(128.)).tab_index(6),
                                     )
                                 })
