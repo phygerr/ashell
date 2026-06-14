@@ -4,6 +4,69 @@ use gpui_component::Root;
 use crate::session::config::ConfigStore;
 use crate::Ashell;
 
+struct LocalMinutelyRoller {
+    dir: std::path::PathBuf,
+    prefix: String,
+    current_minute: u32,
+    file: Option<std::fs::File>,
+}
+
+impl LocalMinutelyRoller {
+    fn new(dir: std::path::PathBuf, prefix: String) -> Self {
+        Self { dir, prefix, current_minute: 60, file: None }
+    }
+    
+    fn rollover(&mut self, now: chrono::DateTime<chrono::Local>) -> std::io::Result<()> {
+        use chrono::Timelike;
+        let minute = now.minute();
+        if self.current_minute != minute || self.file.is_none() {
+            let filename = format!("{}-{}.log", self.prefix, now.format("%Y-%m-%d-%H-%M"));
+            let path = self.dir.join(filename);
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)?;
+            self.file = Some(file);
+            self.current_minute = minute;
+            
+            // Cleanup old files keeping last 6
+            if let Ok(entries) = std::fs::read_dir(&self.dir) {
+                let mut files: Vec<_> = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_name().to_string_lossy().starts_with(&self.prefix))
+                    .collect();
+                files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH));
+                if files.len() > 6 {
+                    for file in files.iter().take(files.len() - 6) {
+                        let _ = std::fs::remove_file(file.path());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::io::Write for LocalMinutelyRoller {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let now = chrono::Local::now();
+        let _ = self.rollover(now);
+        if let Some(f) = &mut self.file {
+            f.write(buf)
+        } else {
+            Ok(buf.len())
+        }
+    }
+    
+    fn flush(&mut self) -> std::io::Result<()> {
+        if let Some(f) = &mut self.file {
+            f.flush()
+        } else {
+            Ok(())
+        }
+    }
+}
+
 pub(crate) fn init_logging() {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -13,14 +76,9 @@ pub(crate) fn init_logging() {
     
     std::fs::create_dir_all(&log_dir).ok();
 
-    let file_appender = tracing_appender::rolling::Builder::new()
-        .rotation(tracing_appender::rolling::Rotation::MINUTELY)
-        .max_log_files(6)
-        .filename_prefix("ashell.log")
-        .build(log_dir)
-        .expect("failed to initialize rolling file appender");
+    let roller = LocalMinutelyRoller::new(log_dir.clone(), "ashell".to_string());
         
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    let (non_blocking, _guard) = tracing_appender::non_blocking(roller);
     // Leak the guard so it lives for the entire duration of the app since GPUI's run might not return
     std::mem::forget(_guard);
 
@@ -28,12 +86,13 @@ pub(crate) fn init_logging() {
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
 
     let stdout_layer = if cfg!(debug_assertions) {
-        Some(tracing_subscriber::fmt::layer().with_target(true))
+        Some(tracing_subscriber::fmt::layer().with_timer(tracing_subscriber::fmt::time::LocalTime::rfc_3339()).with_target(true))
     } else {
         None
     };
         
     let file_layer = tracing_subscriber::fmt::layer()
+        .with_timer(tracing_subscriber::fmt::time::LocalTime::rfc_3339())
         .with_writer(non_blocking)
         .with_ansi(false)
         .with_target(true);
