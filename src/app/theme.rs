@@ -9,6 +9,7 @@ pub(crate) const EMBEDDED_THEME_JSONS: &[&str] = &[
     include_str!("../../assets/themes/tokyonight.json"),
     include_str!("../../assets/themes/gruvbox.json"),
     include_str!("../../assets/themes/solarized.json"),
+    include_str!("../../assets/themes/mobaxterm.json"),
 ];
 
 pub(crate) fn load_fonts(cx: &mut App) -> Result<()> {
