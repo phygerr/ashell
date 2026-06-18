@@ -1541,6 +1541,7 @@ impl Ashell {
                                 Button::new("sidebar-collapse-toggle")
                                     .ghost()
                                     .icon(IconName::PanelLeftClose)
+                                    .tooltip(t!("settings_toggle_sidebar").to_string())
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.sidebar_collapsed = true;
                                         this.config.set_sidebar_collapsed(true);
@@ -1552,6 +1553,7 @@ impl Ashell {
                                 Button::new("sidebar-settings")
                                     .ghost()
                                     .icon(IconName::Settings)
+                                    .tooltip(t!("settings_open_settings").to_string())
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.show_settings_dialog(window, cx)
                                     })),
@@ -1772,6 +1774,7 @@ impl Ashell {
                         Button::new("sidebar-expand-toggle")
                             .ghost()
                             .icon(IconName::PanelLeftOpen)
+                            .tooltip(t!("settings_toggle_sidebar").to_string())
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.sidebar_collapsed = false;
                                 this.config.set_sidebar_collapsed(false);
@@ -2029,6 +2032,7 @@ impl Ashell {
                                     .small()
                                     .rounded(px(999.))
                                     .icon(IconName::Plus)
+                                    .tooltip(t!("settings_open_session").to_string())
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.show_selector_dialog(window, cx)
                                     })),
@@ -2039,6 +2043,7 @@ impl Ashell {
                                     .small()
                                     .rounded(px(999.))
                                     .icon(IconName::PanelBottom)
+                                    .tooltip(t!("settings_split_pane_down").to_string())
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         window.prevent_default();
                                         cx.stop_propagation();
@@ -2051,6 +2056,7 @@ impl Ashell {
                                     .small()
                                     .rounded(px(999.))
                                     .icon(IconName::PanelRight)
+                                    .tooltip(t!("settings_split_pane_right").to_string())
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         window.prevent_default();
                                         cx.stop_propagation();
@@ -2434,7 +2440,6 @@ impl Render for Ashell {
                                 .size_full()
                                 .relative()
                                 .overflow_hidden()
-                                .child(self.render_tab_bar(cx))
                                 .child(body_panel),
                         ),
                 )
@@ -2455,7 +2460,6 @@ impl Render for Ashell {
                     .size_full()
                     .relative()
                     .overflow_hidden()
-                    .child(self.render_tab_bar(cx))
                     .child(body_panel),
             );
 
@@ -2466,7 +2470,7 @@ impl Render for Ashell {
                 .into_any_element()
         };
 
-        div()
+        v_flex()
             .id("ashell-root")
             .size_full()
             .bg(cx.theme().background)
@@ -2499,7 +2503,14 @@ impl Render for Ashell {
                     this.close_tab(active_id, cx);
                 }
             }))
-            .child(workspace)
+            .child(
+                gpui_component::TitleBar::new().child(
+                    div().flex().items_center().w_full().child(self.render_tab_bar(cx)),
+                ),
+            )
+            .child(
+                div().flex_1().min_h_0().child(workspace),
+            )
             .children(Root::render_dialog_layer(window, cx))
             .children(Root::render_sheet_layer(window, cx))
             .when_some(self.sftp_context_menu.clone(), |this, menu| {
