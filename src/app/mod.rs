@@ -1,6 +1,7 @@
 pub mod constants;
 pub mod dialogs;
 pub mod keybinding_recorder;
+pub mod search;
 pub mod startup;
 pub mod theme;
 pub mod ui;
@@ -272,6 +273,12 @@ pub(crate) struct Ashell {
     pub(crate) last_system_sample: Instant,
     pub(crate) last_theme_sync: Instant,
 
+    pub(crate) search_input: Entity<InputState>,
+    pub(crate) search_active: bool,
+    pub(crate) search_query: String,
+    pub(crate) search_matches: Vec<(i32, i32)>,
+    pub(crate) search_current: usize,
+
     pub(crate) system_tab_id: Option<String>,
     pub(crate) sftp_handles: std::collections::HashMap<String, crate::sftp::SftpHandle>,
 
@@ -352,6 +359,9 @@ impl Ashell {
         let sftp_path_input = cx.new(|cx| InputState::new(window, cx).default_value("/"));
         let sftp_new_folder_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("new_folder").to_string()));
+        let search_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(t!("search").to_string())
+        });
 
         let _subscriptions = vec![
             cx.subscribe_in(&host_input, window, Self::on_input_event),
@@ -364,6 +374,7 @@ impl Ashell {
             cx.subscribe_in(&passphrase_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_path_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_new_folder_input, window, Self::on_input_event),
+            cx.subscribe_in(&search_input, window, Self::on_input_event),
         ];
 
         let (events_tx, events_rx) = mpsc::channel();
@@ -495,6 +506,12 @@ impl Ashell {
             last_system_sample: Instant::now(),
             last_theme_sync: Instant::now(),
 
+            search_input,
+            search_active: false,
+            search_query: String::new(),
+            search_matches: Vec::new(),
+            search_current: 0,
+
             system_tab_id: None,
             sftp_handles: std::collections::HashMap::new(),
 
@@ -552,6 +569,18 @@ impl Ashell {
                     self.sftp_creating_folder = false;
                 }
                 _ => {}
+            }
+        } else if input == &self.search_input {
+            if let InputEvent::PressEnter { .. } = event {
+                if self.search_query.is_empty()
+                    || self.search_input.read(cx).text() != self.search_query
+                {
+                    self.perform_search(cx);
+                } else {
+                    self.search_goto_next(cx);
+                }
+                window.prevent_default();
+                cx.stop_propagation();
             }
         }
         cx.notify();

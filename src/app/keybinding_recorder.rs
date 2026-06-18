@@ -18,6 +18,7 @@ gpui::actions!(
         OpenSession,
         OpenTransfers,
         NewSsh,
+        OpenSearch,
         ToggleSidebar,
         ToggleSftpZoom,
         FocusPaneLeft,
@@ -61,6 +62,11 @@ pub(crate) const WORKSPACE_ACTIONS: &[WorkspaceAction] = &[
         id: "NewSsh",
         label_key: "settings_new_ssh",
         default_suffix: "n",
+    },
+    WorkspaceAction {
+        id: "OpenSearch",
+        label_key: "settings_open_search",
+        default_suffix: "f",
     },
     WorkspaceAction {
         id: "ToggleSidebar",
@@ -206,6 +212,7 @@ pub(crate) fn unbind_all_workspace_keys(cx: &mut App, config: &ConfigStore) {
     unbind_action!("OpenSession", crate::OpenSession);
     unbind_action!("OpenTransfers", crate::OpenTransfers);
     unbind_action!("NewSsh", crate::NewSsh);
+    unbind_action!("OpenSearch", crate::OpenSearch);
     unbind_action!("ToggleSidebar", crate::ToggleSidebar);
     unbind_action!("ToggleSftpZoom", crate::ToggleSftpZoom);
     unbind_action!("FocusPaneLeft", crate::FocusPaneLeft);
@@ -261,6 +268,7 @@ fn bind_workspace_actions(cx: &mut App, config: &ConfigStore) {
     bind_action!("OpenSession", crate::OpenSession);
     bind_action!("OpenTransfers", crate::OpenTransfers);
     bind_action!("NewSsh", crate::NewSsh);
+    bind_action!("OpenSearch", crate::OpenSearch);
     bind_action!("ToggleSidebar", crate::ToggleSidebar);
     bind_action!("ToggleSftpZoom", crate::ToggleSftpZoom);
     bind_action!("FocusPaneLeft", crate::FocusPaneLeft);
@@ -281,7 +289,7 @@ impl KeybindingsPage {
         let groups = [
             (
                 "settings_group_keybind_general",
-                vec!["OpenSettings", "OpenSession", "OpenTransfers", "NewSsh"],
+                vec!["OpenSettings", "OpenSession", "OpenTransfers", "NewSsh", "OpenSearch"],
             ),
             (
                 "settings_group_keybind_zoom",

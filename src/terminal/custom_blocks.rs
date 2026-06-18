@@ -425,7 +425,12 @@ fn is_boundary(c: char) -> bool {
 
 /// Scan terminal cells for common keywords and patterns, returning a map of
 /// `(row, col) -> highlight_color` for cells that should be recolored.
-pub fn highlight_cells(cells: &[RenderCell], rows: usize) -> HashMap<(i32, i32), Hsla> {
+/// If `search_map` is provided, search match colors take priority over keyword colors.
+pub fn highlight_cells(
+    cells: &[RenderCell],
+    rows: usize,
+    search_map: Option<&HashMap<(i32, i32), Hsla>>,
+) -> HashMap<(i32, i32), Hsla> {
     let colors = highlight_colors();
 
     // Build a per-row char array with cell column tracking.
@@ -453,7 +458,6 @@ pub fn highlight_cells(cells: &[RenderCell], rows: usize) -> HashMap<(i32, i32),
         let mut chars_buf = String::with_capacity(row.len());
         let mut byte_to_col: Vec<i32> = Vec::new();
         for &(col, c) in row {
-            let start = chars_buf.len();
             chars_buf.push(c);
             // Pad the mapping so every byte of this char points to `col`.
             while byte_to_col.len() < chars_buf.len() {
@@ -555,6 +559,13 @@ pub fn highlight_cells(cells: &[RenderCell], rows: usize) -> HashMap<(i32, i32),
             for c in start_col..=end_col {
                 map.entry((row_i32, c)).or_insert(colors.port);
             }
+        }
+    }
+
+    // Merge search highlight map — search colors override keyword colors.
+    if let Some(sm) = search_map {
+        for (key, color) in sm {
+            map.insert(*key, *color);
         }
     }
 

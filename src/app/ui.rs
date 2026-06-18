@@ -2061,39 +2061,47 @@ impl Ashell {
             )
     }
 
-    fn render_terminal_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_terminal_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let has_active = self.active_tab.is_some();
         let pane_tree = self.pane_root.clone();
         let view = cx.entity();
 
-        v_flex().size_full().child(
-            div()
-                .size_full()
-                .on_prepaint(move |bounds, _window, cx| {
-                    let _ = view.update(cx, |this, _| {
-                        this.terminal_panel_bounds = Some(bounds);
-                    });
-                })
-                .overflow_hidden()
-                .track_focus(&self.focus_handle)
-                .key_context(TERMINAL_KEY_CONTEXT)
-                .on_mouse_down(MouseButton::Left, cx.listener(Self::focus_terminal))
-                .on_mouse_down(
-                    MouseButton::Right,
-                    cx.listener(Self::on_terminal_right_click),
-                )
-                .on_mouse_move(cx.listener(Self::on_terminal_mouse_move))
-                .on_mouse_up(MouseButton::Left, cx.listener(Self::on_terminal_mouse_up))
-                .on_key_down(cx.listener(Self::on_terminal_key_down))
-                .on_action(cx.listener(Self::on_terminal_tab_action))
-                .on_action(cx.listener(Self::on_terminal_backtab_action))
-                .on_scroll_wheel(cx.listener(Self::on_terminal_scroll))
-                .child(if has_active {
-                    Self::render_pane_tree(self, &pane_tree, &[], cx).into_any_element()
-                } else {
-                    self.render_home_page(cx).into_any_element()
-                }),
-        )
+        // Search bar overlay — rendered as a sibling outside the terminal panel
+        // so its Input can receive key events independently.
+        let search_bar = self.render_search_bar(window, cx);
+
+        div()
+            .size_full()
+            .relative()
+            .child(
+                div()
+                    .size_full()
+                    .on_prepaint(move |bounds, _window, cx| {
+                        let _ = view.update(cx, |this, _| {
+                            this.terminal_panel_bounds = Some(bounds);
+                        });
+                    })
+                    .overflow_hidden()
+                    .track_focus(&self.focus_handle)
+                    .key_context(TERMINAL_KEY_CONTEXT)
+                    .on_mouse_down(MouseButton::Left, cx.listener(Self::focus_terminal))
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(Self::on_terminal_right_click),
+                    )
+                    .on_mouse_move(cx.listener(Self::on_terminal_mouse_move))
+                    .on_mouse_up(MouseButton::Left, cx.listener(Self::on_terminal_mouse_up))
+                    .on_key_down(cx.listener(Self::on_terminal_key_down))
+                    .on_action(cx.listener(Self::on_terminal_tab_action))
+                    .on_action(cx.listener(Self::on_terminal_backtab_action))
+                    .on_scroll_wheel(cx.listener(Self::on_terminal_scroll))
+                    .child(if has_active {
+                        Self::render_pane_tree(self, &pane_tree, &[], cx).into_any_element()
+                    } else {
+                        self.render_home_page(cx).into_any_element()
+                    }),
+            )
+            .child(search_bar)
     }
 
     fn render_pane_tree(
@@ -2153,6 +2161,7 @@ impl Ashell {
                         font_size,
                         line_height,
                         cell_width,
+                        this.search_highlight_map(),
                     ));
                 let scrollbar = this.terminal_scrollbars.entry(tab_id.clone()).or_default();
                 el = el.vertical_scrollbar(scrollbar);
@@ -2390,7 +2399,7 @@ impl Render for Ashell {
 
         let body_panel = v_resizable("ashell-body")
             .with_state(&self.body_panels)
-            .child(resizable_panel().child(self.render_terminal_panel(cx)))
+            .child(resizable_panel().child(self.render_terminal_panel(window, cx)))
             .child(
                 resizable_panel()
                     .size(sftp_size)
@@ -2467,6 +2476,7 @@ impl Render for Ashell {
             .on_action(cx.listener(|this, _: &crate::OpenSession, window, cx| this.show_selector_dialog(window, cx)))
             .on_action(cx.listener(|this, _: &crate::OpenTransfers, window, cx| this.show_transfers_dialog(window, cx)))
             .on_action(cx.listener(|this, _: &crate::NewSsh, window, cx| this.show_ssh_dialog(window, cx)))
+            .on_action(cx.listener(|this, _: &crate::OpenSearch, window, cx| this.toggle_search(window, cx)))
             .on_action(cx.listener(|this, _: &crate::ToggleSidebar, _, cx| {
                 this.sidebar_collapsed = !this.sidebar_collapsed;
                 this.config.set_sidebar_collapsed(this.sidebar_collapsed);

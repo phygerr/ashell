@@ -15,9 +15,9 @@ rust_i18n::i18n!("locales", fallback = "en");
 gpui::actions!(ashell_terminal, [TerminalTabKey, TerminalBacktabKey]);
 
 pub(crate) use app::keybinding_recorder::{
-    ClosePane, FocusPaneDown, FocusPaneLeft, FocusPaneRight, FocusPaneUp, NewSsh, OpenSession,
-    OpenSettings, OpenTransfers, SplitPaneDown, SplitPaneLeft, SplitPaneRight, SplitPaneUp,
-    ToggleSftpZoom, ToggleSidebar,
+    ClosePane, FocusPaneDown, FocusPaneLeft, FocusPaneRight, FocusPaneUp, NewSsh, OpenSearch,
+    OpenSession, OpenSettings, OpenTransfers, SplitPaneDown, SplitPaneLeft, SplitPaneRight,
+    SplitPaneUp, ToggleSftpZoom, ToggleSidebar,
 };
 
 pub(crate) use app::{

@@ -19,6 +19,18 @@ impl Ashell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // If the search input is focused, let it handle its own keys.
+        if self.search_active
+            && self
+                .search_input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+        {
+            self.on_search_key_down(event, window, cx);
+            return;
+        }
+
         // Pane navigation: Alt + h/j/k/l
         if event.keystroke.modifiers.alt
             && !event.keystroke.modifiers.shift

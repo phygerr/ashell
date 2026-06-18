@@ -132,6 +132,7 @@ pub struct TerminalElement {
     font_size: Pixels,
     line_height: Pixels,
     cell_width: Pixels,
+    search_highlights: Option<std::collections::HashMap<(i32, i32), Hsla>>,
 }
 
 pub struct PrepaintState {
@@ -270,6 +271,7 @@ impl TerminalElement {
         font_size: Pixels,
         line_height: Pixels,
         cell_width: Pixels,
+        search_highlights: Option<std::collections::HashMap<(i32, i32), Hsla>>,
     ) -> Self {
         Self {
             view,
@@ -280,6 +282,7 @@ impl TerminalElement {
             font_size,
             line_height,
             cell_width,
+            search_highlights,
         }
     }
 
@@ -355,7 +358,8 @@ impl TerminalElement {
         let mut current_run: Option<BatchedTextRun> = None;
 
         // Compute keyword / pattern highlight map once per frame.
-        let highlights = highlight_cells(&self.snapshot.cells, self.snapshot.rows);
+        let highlights =
+            highlight_cells(&self.snapshot.cells, self.snapshot.rows, self.search_highlights.as_ref());
 
         for render_cell in &self.snapshot.cells {
             let cell = &render_cell.cell;
