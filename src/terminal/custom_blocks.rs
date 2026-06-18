@@ -453,7 +453,6 @@ pub fn highlight_cells(cells: &[RenderCell], rows: usize) -> HashMap<(i32, i32),
         let mut chars_buf = String::with_capacity(row.len());
         let mut byte_to_col: Vec<i32> = Vec::new();
         for &(col, c) in row {
-            let start = chars_buf.len();
             chars_buf.push(c);
             // Pad the mapping so every byte of this char points to `col`.
             while byte_to_col.len() < chars_buf.len() {
