@@ -11,7 +11,7 @@ use gpui::{
 use gpui_component::ActiveTheme as _;
 
 use crate::Ashell;
-use crate::terminal::custom_blocks::{is_custom_block_supported, paint_custom_block};
+use crate::terminal::custom_blocks::{highlight_cells, is_custom_block_supported, paint_custom_block};
 use crate::terminal::{RenderSnapshot, ViewportSelection};
 
 #[derive(Clone, Copy)]
@@ -354,6 +354,9 @@ impl TerminalElement {
         let mut custom_blocks = Vec::new();
         let mut current_run: Option<BatchedTextRun> = None;
 
+        // Compute keyword / pattern highlight map once per frame.
+        let highlights = highlight_cells(&self.snapshot.cells, self.snapshot.rows);
+
         for render_cell in &self.snapshot.cells {
             let cell = &render_cell.cell;
             if cell.flags.intersects(
@@ -392,7 +395,12 @@ impl TerminalElement {
                 continue;
             }
 
-            let style = self.cell_run_style(cell, cx);
+            let mut style = self.cell_run_style(cell, cx);
+
+            // Apply keyword highlight color if this cell was matched.
+            if let Some(&hl_color) = highlights.get(&(render_cell.row, render_cell.col)) {
+                style.color = hl_color;
+            }
 
             // Box Drawing & Block Elements interception
             let is_custom_block = is_custom_block_supported(cell.c);
