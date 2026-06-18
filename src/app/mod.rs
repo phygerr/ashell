@@ -573,7 +573,7 @@ impl Ashell {
         } else if input == &self.search_input {
             if let InputEvent::PressEnter { .. } = event {
                 if self.search_query.is_empty()
-                    || self.search_input.read(cx).text() != self.search_query
+                    || self.search_input.read(cx).text().to_string() != self.search_query
                 {
                     self.perform_search(cx);
                 } else {

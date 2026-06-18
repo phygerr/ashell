@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use gpui::{
-    Context, Hsla, InteractiveElement as _, ParentElement as _,
+    Context, Focusable as _, Hsla, InteractiveElement as _, ParentElement as _,
     Styled as _, Window, div, px, rems,
 };
 use gpui_component::{
-    ActiveTheme as _, IconName, Sizable as _,
+    ActiveTheme as _, Disableable as _, IconName, Sizable as _,
     button::{Button, ButtonVariants as _},
     h_flex, input::Input,
 };
@@ -167,7 +167,7 @@ impl Ashell {
         cx.notify();
     }
 
-    fn jump_to_current_match(&mut self, cx: &mut Context<Self>) {
+    fn jump_to_current_match(&mut self, _cx: &mut Context<Self>) {
         let Some((target_row, _)) = find_nth_match_start(
             &self.search_matches,
             self.search_query.len(),
@@ -217,7 +217,7 @@ impl Ashell {
         let mut group_idx = 0;
         let mut i = 0;
         while i < sorted.len() {
-            let (r, c) = sorted[i];
+            let (r, _c) = sorted[i];
             let is_current = group_idx == self.search_current;
             let color = if is_current {
                 current_color
@@ -259,7 +259,7 @@ impl Ashell {
                 if event.keystroke.modifiers.shift {
                     self.search_goto_prev(cx);
                 } else if self.search_query.is_empty()
-                    || self.search_input.read(cx).text() != self.search_query
+                    || self.search_input.read(cx).text().to_string() != self.search_query
                 {
                     self.perform_search(cx);
                 } else {
@@ -283,7 +283,6 @@ impl Ashell {
                 .absolute()
                 .top(px(8.))
                 .right(px(8.))
-                .z_index(10)
                 .child(
                     Button::new("search-btn")
                         .ghost()
@@ -313,7 +312,6 @@ impl Ashell {
             .absolute()
             .top(px(8.))
             .right(px(8.))
-            .z_index(10)
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 if event.keystroke.key.as_str() == "escape" {
                     this.close_search(window, cx);
@@ -327,10 +325,9 @@ impl Ashell {
                     .items_center()
                     .p_1()
                     .rounded(px(6.))
-                    .bg(cx.theme().popover.background)
+                    .bg(cx.theme().popover)
                     .border_1()
                     .border_color(cx.theme().border)
-                    .shadow_md()
                     .child(
                         div()
                             .w(px(200.))

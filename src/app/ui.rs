@@ -2072,10 +2072,6 @@ impl Ashell {
         let pane_tree = self.pane_root.clone();
         let view = cx.entity();
 
-        // Search bar overlay — rendered as a sibling outside the terminal panel
-        // so its Input can receive key events independently.
-        let search_bar = self.render_search_bar(window, cx);
-
         div()
             .size_full()
             .relative()
@@ -2107,7 +2103,9 @@ impl Ashell {
                         self.render_home_page(cx).into_any_element()
                     }),
             )
-            .child(search_bar)
+            // Search bar overlay — rendered as a sibling outside the terminal panel
+            // so its Input can receive key events independently.
+            .child(self.render_search_bar(window, cx))
     }
 
     fn render_pane_tree(
