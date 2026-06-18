@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use gpui::{
-    Context, Focusable as _, Hsla, IntoElement, InteractiveElement as _, ParentElement as _,
-    Styled as _, Window, div, prelude::FluentBuilder as _, px, rems,
+    Context, Focusable as _, Hsla, IntoElement, InteractiveElement as _, MouseButton,
+    ParentElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px, rems,
 };
 use gpui_component::{
     ActiveTheme as _, Disableable as _, IconName, Sizable as _,
@@ -313,6 +313,12 @@ impl Ashell {
             .absolute()
             .top(px(8.))
             .right(px(24.))
+            // Ensure the search input gets focus when the user clicks on the
+            // search bar area (the input itself may not receive the click
+            // because the bar div intercepts it).
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
+                this.refocus_search_input(window, cx);
+            }))
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 let key = event.keystroke.key.as_str();
                 if key == "escape" {
