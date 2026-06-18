@@ -184,7 +184,10 @@ pub(crate) fn open_main_window(cx: &mut App) {
         window_options.titlebar = Some(gpui::TitlebarOptions {
             title: None,
             appears_transparent: true,
+            #[cfg(target_os = "macos")]
             traffic_light_position: Some(gpui::point(px(9.0), px(9.0))),
+            #[cfg(not(target_os = "macos"))]
+            traffic_light_position: None,
         });
     }
 
