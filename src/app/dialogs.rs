@@ -160,7 +160,11 @@ impl Ashell {
                                         .child(
                                             Button::new("connect-ssh-cancel")
                                                 .label(t!("cancel").to_string())
-                                                .on_click(|_, window, cx| window.close_dialog(cx)),
+                                                .on_click(window.listener_for(&view, |this, _, window, cx| {
+                                                    this.active_dialog = None;
+                                                    window.close_dialog(cx);
+                                                    cx.notify();
+                                                })),
                                         )
                                         .child(
                                             Button::new("connect-ssh-confirm")
@@ -259,8 +263,10 @@ impl Ashell {
                                         .on_mouse_down(
                                             MouseButton::Left,
                                             window.listener_for(&view, |this, _, window, cx| {
+                                                this.active_dialog = None;
                                                 this.open_local(cx);
                                                 window.close_dialog(cx);
+                                                cx.notify();
                                             }),
                                         )
                                         .child(
@@ -301,8 +307,10 @@ impl Ashell {
                                         .on_mouse_down(
                                             MouseButton::Left,
                                             window.listener_for(&view, |this, _, window, cx| {
+                                                this.active_dialog = None;
                                                 window.close_dialog(cx);
                                                 this.open_new_ssh_dialog(window, cx);
+                                                cx.notify();
                                             }),
                                         )
                                         .child(
@@ -370,11 +378,13 @@ impl Ashell {
                                                         window.listener_for(
                                                             &view,
                                                             move |this, _, window, cx| {
+                                                                this.active_dialog = None;
                                                                 this.connect_saved_session(
                                                                     connect_id.clone(),
                                                                     cx,
                                                                 );
                                                                 window.close_dialog(cx);
+                                                                cx.notify();
                                                             },
                                                         ),
                                                     )

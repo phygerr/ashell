@@ -176,7 +176,10 @@ pub(crate) fn sync_macos_launch_environment() {
 pub(crate) fn sync_macos_launch_environment() {}
 
 pub(crate) fn open_main_window(cx: &mut App) {
-    let mut window_options = WindowOptions::default();
+    let mut window_options = WindowOptions {
+        titlebar: Some(gpui_component::TitleBar::title_bar_options()),
+        ..Default::default()
+    };
 
     #[cfg(not(target_os = "macos"))]
     if let Ok(img) = image::load_from_memory(include_bytes!("../../assets/icons/ashell.png")) {

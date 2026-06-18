@@ -113,7 +113,9 @@ impl Ashell {
 
         self.open_ssh_session(session, cx);
         self.editing_session_id = None;
+        self.active_dialog = None;
         window.close_dialog(cx);
+        cx.notify();
     }
 
     pub(crate) fn set_input_value(
@@ -368,6 +370,7 @@ impl Ashell {
             return;
         };
 
+        self.active_dialog = None;
         match entry {
             SelectorEntry::Local => {
                 self.open_local(cx);
@@ -382,6 +385,7 @@ impl Ashell {
                 window.close_dialog(cx);
             }
         }
+        cx.notify();
     }
 
     pub(crate) fn on_selector_key_down(
