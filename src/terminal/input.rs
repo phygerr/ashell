@@ -21,12 +21,11 @@ impl Ashell {
     ) {
         // If the search input is focused, skip terminal key processing
         // so the input can handle text entry, paste, etc. normally.
-        if self.search_active
-            && self
-                .search_input
-                .read(cx)
-                .focus_handle(cx)
-                .is_focused(window)
+        if self
+            .search_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
         {
             return;
         }

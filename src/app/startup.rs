@@ -180,14 +180,14 @@ pub(crate) fn open_main_window(cx: &mut App) {
 
     let mut window_options = WindowOptions::default();
 
+    // Integrated title bar with custom traffic-light positioning is macOS-only.
+    // On Windows/Linux, use the native title bar for proper platform look.
+    #[cfg(target_os = "macos")]
     if config.title_bar_style() == crate::session::config::TitleBarStyle::Integrated {
         window_options.titlebar = Some(gpui::TitlebarOptions {
             title: None,
             appears_transparent: true,
-            #[cfg(target_os = "macos")]
             traffic_light_position: Some(gpui::point(px(9.0), px(9.0))),
-            #[cfg(not(target_os = "macos"))]
-            traffic_light_position: None,
         });
     }
 

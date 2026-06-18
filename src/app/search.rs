@@ -45,7 +45,15 @@ impl Ashell {
 
     pub(crate) fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search_active = true;
-        self.refocus_search_input(window, cx);
+        // Focus the search input on the next frame so it happens after the
+        // current render cycle completes, avoiding focus being stolen back
+        // by the terminal panel's track_focus.
+        let search_input = self.search_input.clone();
+        cx.on_next_frame(window, move |_this, window, cx| {
+            search_input.update(cx, |state, cx| {
+                state.focus_handle(cx).focus(window, cx);
+            });
+        });
         cx.notify();
     }
 
@@ -59,9 +67,14 @@ impl Ashell {
     }
 
     /// Move keyboard focus back to the search input so the user can keep typing.
+    /// Deferred to the next frame so it happens after the current render cycle,
+    /// preventing the terminal panel's track_focus from stealing focus back.
     fn refocus_search_input(&self, window: &mut Window, cx: &mut Context<Self>) {
-        self.search_input.update(cx, |state, cx| {
-            state.focus_handle(cx).focus(window, cx);
+        let search_input = self.search_input.clone();
+        cx.on_next_frame(window, move |_this, window, cx| {
+            search_input.update(cx, |state, cx| {
+                state.focus_handle(cx).focus(window, cx);
+            });
         });
     }
 
@@ -324,7 +337,6 @@ impl Ashell {
                 if key == "escape" {
                     this.close_search(window, cx);
                     window.prevent_default();
-                    cx.stop_propagation();
                 } else if key == "enter" {
                     if event.keystroke.modifiers.shift {
                         this.search_goto_prev(cx);
@@ -336,7 +348,6 @@ impl Ashell {
                         this.search_goto_next(cx);
                     }
                     window.prevent_default();
-                    cx.stop_propagation();
                 }
             }))
             .child(
