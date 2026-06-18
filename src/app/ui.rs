@@ -2431,7 +2431,6 @@ impl Render for Ashell {
                                 .size_full()
                                 .relative()
                                 .overflow_hidden()
-                                .child(self.render_tab_bar(cx))
                                 .child(body_panel),
                         ),
                 )
@@ -2452,7 +2451,6 @@ impl Render for Ashell {
                     .size_full()
                     .relative()
                     .overflow_hidden()
-                    .child(self.render_tab_bar(cx))
                     .child(body_panel),
             );
 
@@ -2463,7 +2461,7 @@ impl Render for Ashell {
                 .into_any_element()
         };
 
-        div()
+        v_flex()
             .id("ashell-root")
             .size_full()
             .bg(cx.theme().background)
@@ -2495,7 +2493,14 @@ impl Render for Ashell {
                     this.close_tab(active_id, cx);
                 }
             }))
-            .child(workspace)
+            .child(
+                gpui_component::TitleBar::new().child(
+                    div().flex().items_center().w_full().child(self.render_tab_bar(cx)),
+                ),
+            )
+            .child(
+                div().flex_1().min_h_0().child(workspace),
+            )
             .children(Root::render_dialog_layer(window, cx))
             .children(Root::render_sheet_layer(window, cx))
             .when_some(self.sftp_context_menu.clone(), |this, menu| {
