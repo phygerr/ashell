@@ -332,24 +332,6 @@ impl Ashell {
             .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
                 this.refocus_search_input(window, cx);
             }))
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                let key = event.keystroke.key.as_str();
-                if key == "escape" {
-                    this.close_search(window, cx);
-                    window.prevent_default();
-                } else if key == "enter" {
-                    if event.keystroke.modifiers.shift {
-                        this.search_goto_prev(cx);
-                    } else if this.search_query.is_empty()
-                        || this.search_input.read(cx).text().to_string() != this.search_query
-                    {
-                        this.perform_search(window, cx);
-                    } else {
-                        this.search_goto_next(cx);
-                    }
-                    window.prevent_default();
-                }
-            }))
             .child(
                 h_flex()
                     .gap_1()
@@ -359,9 +341,19 @@ impl Ashell {
                     .bg(cx.theme().popover)
                     .border_1()
                     .border_color(cx.theme().border)
+                    // Escape is handled on the input wrapper so it fires
+                    // AFTER the input processes the keystroke (the parent
+                    // div's on_key_down fires BEFORE and would block Ctrl+V).
                     .child(
                         div()
                             .w(px(200.))
+                            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                                if event.keystroke.key.as_str() == "escape" {
+                                    this.close_search(window, cx);
+                                    window.prevent_default();
+                                    cx.stop_propagation();
+                                }
+                            }))
                             .child(Input::new(&self.search_input).small()),
                     )
                     .when(!current_display.is_empty(), |this| {
