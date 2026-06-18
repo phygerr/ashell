@@ -85,24 +85,17 @@ impl Ashell {
             return;
         };
 
-        let snapshot = tab.render_snapshot();
         let query_lower = query.to_lowercase();
         let query_byte_len = query.len();
 
-        // Build per-row cell lists.
-        let mut row_cells: Vec<Vec<(i32, char)>> = vec![vec![]; snapshot.rows];
-        for rc in &snapshot.cells {
-            if rc.row >= 0 && (rc.row as usize) < snapshot.rows {
-                row_cells[rc.row as usize].push((rc.col, rc.cell.c));
-            }
-        }
-        for row in row_cells.iter_mut() {
-            row.sort_by_key(|&(col, _)| col);
-        }
+        // Search the ENTIRE terminal buffer (scrollback + visible screen).
+        // full_grid_rows returns grid line indices; the first row is at
+        // `grid_start` (typically -history_size).
+        let (grid_start, all_rows) = tab.full_grid_rows();
 
         let mut matches: Vec<(i32, i32)> = Vec::new();
 
-        for (row_idx, row) in row_cells.iter().enumerate() {
+        for (row_idx, row) in all_rows.iter().enumerate() {
             if row.is_empty() {
                 continue;
             }
@@ -112,14 +105,15 @@ impl Ashell {
             let mut byte_to_col: Vec<i32> = Vec::new();
             for &(col, c) in row {
                 text.push(c);
-                // Each byte of this character maps to `col`.
                 while byte_to_col.len() < text.len() {
                     byte_to_col.push(col);
                 }
             }
             let text_lower = text.to_lowercase();
 
-            // Find all occurrences of the query in this row.
+            // Grid line index for this row.
+            let abs_row = grid_start + row_idx as i32;
+
             let mut search_start = 0;
             while let Some(pos) = text_lower[search_start..].find(&query_lower) {
                 let abs = search_start + pos;
@@ -127,7 +121,7 @@ impl Ashell {
                 let end_byte = (abs + query_byte_len).min(byte_to_col.len());
                 let end_col = byte_to_col[end_byte - 1];
                 for c in start_col..=end_col {
-                    matches.push((row_idx as i32, c));
+                    matches.push((abs_row, c));
                 }
                 search_start = abs + query_byte_len;
             }
@@ -181,7 +175,8 @@ impl Ashell {
     }
 
     fn jump_to_current_match(&mut self, _cx: &mut Context<Self>) {
-        let Some((target_row, _)) =
+        // target_grid_line is the grid line index (negative = history).
+        let Some((target_grid_line, _)) =
             find_nth_match_start(&self.search_matches, self.search_current)
         else {
             return;
@@ -193,14 +188,17 @@ impl Ashell {
             .and_then(|id| self.tabs.iter_mut().find(|t| &t.id == id))
         {
             let snapshot = tab.render_snapshot();
+            let display_offset = snapshot.display_offset as i32;
             let rows = snapshot.rows as i32;
-            let history = snapshot.history_size as i32;
-            let current_offset = snapshot.display_offset as i32;
-            let visible_top = history - current_offset;
-            let visible_bottom = visible_top + rows - 1;
 
-            if target_row < visible_top || target_row > visible_bottom {
-                let new_offset = (history + rows - 1 - target_row).max(0) as usize;
+            // viewport row = grid_line + display_offset
+            let vp_row = target_grid_line + display_offset;
+            let visible = vp_row >= 0 && vp_row < rows;
+
+            if !visible {
+                // Scroll so the target grid line appears near the top.
+                // display_offset = -grid_line puts it at viewport row 0.
+                let new_offset = (-target_grid_line).max(0) as usize;
                 if new_offset > snapshot.display_offset {
                     tab.scroll_up_by(new_offset - snapshot.display_offset);
                 } else if new_offset < snapshot.display_offset {
@@ -210,12 +208,24 @@ impl Ashell {
         }
     }
 
-    /// Build a highlight map for search matches. The current match gets a
-    /// distinct color.
+    /// Build a highlight map for search matches, converting grid line indices
+    /// to the current viewport coordinates.
     pub(crate) fn search_highlight_map(&self) -> Option<HashMap<(i32, i32), Hsla>> {
         if self.search_matches.is_empty() || self.search_query.is_empty() {
             return None;
         }
+
+        // Get current display_offset to convert grid line → viewport row.
+        let Some(tab) = self
+            .active_tab
+            .as_ref()
+            .and_then(|id| self.tabs.iter().find(|t| &t.id == id))
+        else {
+            return None;
+        };
+        let snapshot = tab.render_snapshot();
+        let display_offset = snapshot.display_offset as i32;
+        let rows = snapshot.rows as i32;
 
         let mut map = HashMap::new();
         let match_color = search_match_color();
@@ -234,15 +244,27 @@ impl Ashell {
                 match_color
             };
 
-            // Color all consecutive cells in this group.
-            let (r, _) = sorted[i];
-            let mut j = i;
-            while j < sorted.len() && sorted[j].0 == r {
-                if j > i && sorted[j].1 != sorted[j - 1].1 + 1 {
-                    break;
+            // grid_line → viewport row:  vp_row = grid_line + display_offset
+            let (grid_line, _) = sorted[i];
+            let vp_row = grid_line + display_offset;
+            if vp_row >= 0 && vp_row < rows {
+                let mut j = i;
+                while j < sorted.len() && sorted[j].0 == grid_line {
+                    if j > i && sorted[j].1 != sorted[j - 1].1 + 1 {
+                        break;
+                    }
+                    map.insert((vp_row, sorted[j].1), color);
+                    j += 1;
                 }
-                map.insert(sorted[j], color);
-                j += 1;
+            } else {
+                // Outside current viewport — skip.
+                let mut j = i;
+                while j < sorted.len() && sorted[j].0 == grid_line {
+                    if j > i && sorted[j].1 != sorted[j - 1].1 + 1 {
+                        break;
+                    }
+                    j += 1;
+                }
             }
 
             group_idx += 1;
