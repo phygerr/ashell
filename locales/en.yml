@@ -157,3 +157,7 @@ settings_split_pane_up: "Split Pane Up"
 settings_split_pane_down: "Split Pane Down"
 settings_close_pane: "Close Pane"
 keybind_conflict: '"%{key}" is already used by "%{action}", please choose another key'
+title_bar_style: "Title Bar Style"
+title_bar_native: "Native"
+title_bar_integrated: "Integrated"
+restart_hint: " (Restart required)"

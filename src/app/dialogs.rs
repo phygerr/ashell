@@ -1297,6 +1297,50 @@ impl Ashell {
                                                         })
                                                     )
                                                 )
+                                                .item(
+                                                    SettingItem::new(
+                                                        format!("{}{}", t!("title_bar_style"), t!("restart_hint")),
+                                                        SettingField::render({
+                                                            let view = view_clone_for_general.clone();
+                                                            move |_, _window, cx| {
+                                                                let current_style = view.read(cx).config.title_bar_style();
+                                                                Button::new("title-bar-style-dropdown")
+                                                                    .small()
+                                                                    .label(match current_style {
+                                                                        crate::session::config::TitleBarStyle::Native => t!("title_bar_native").to_string(),
+                                                                        crate::session::config::TitleBarStyle::Integrated => t!("title_bar_integrated").to_string(),
+                                                                    })
+                                                                    .dropdown_menu_with_anchor(Anchor::BottomRight, {
+                                                                        let view = view.clone();
+                                                                        move |mut menu, window, cx| {
+                                                                            let current_style = view.read(cx).config.title_bar_style();
+                                                                            menu = menu.min_w(160.)
+                                                                                .item(
+                                                                                    PopupMenuItem::new(t!("title_bar_native").to_string())
+                                                                                        .checked(current_style == crate::session::config::TitleBarStyle::Native)
+                                                                                        .on_click(window.listener_for(&view, |this, _, _, cx| {
+                                                                                            this.config.set_title_bar_style(crate::session::config::TitleBarStyle::Native);
+                                                                                            let _ = this.config.save();
+                                                                                            cx.notify();
+                                                                                        }))
+                                                                                )
+                                                                                .item(
+                                                                                    PopupMenuItem::new(t!("title_bar_integrated").to_string())
+                                                                                        .checked(current_style == crate::session::config::TitleBarStyle::Integrated)
+                                                                                        .on_click(window.listener_for(&view, |this, _, _, cx| {
+                                                                                            this.config.set_title_bar_style(crate::session::config::TitleBarStyle::Integrated);
+                                                                                            let _ = this.config.save();
+                                                                                            cx.notify();
+                                                                                        }))
+                                                                                );
+                                                                            menu
+                                                                        }
+                                                                    })
+                                                                    .into_any_element()
+                                                            }
+                                                        })
+                                                    )
+                                                )
                                         )
                                         .group(
                                             SettingGroup::new()
