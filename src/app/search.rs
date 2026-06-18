@@ -13,23 +13,24 @@ use rust_i18n::t;
 
 use crate::Ashell;
 
-/// Search highlight color — bright amber/yellow background.
+// ── Search highlight colors ──────────────────────────────────────────────
+// Regular matches: semi-transparent red.
 fn search_match_color() -> Hsla {
     Hsla {
-        h: 48.0 / 360.0,
-        s: 0.9,
-        l: 0.55,
-        a: 1.0,
+        h: 0.0,
+        s: 0.85,
+        l: 0.50,
+        a: 0.45,
     }
 }
 
-/// Current-match highlight — brighter, more saturated.
+// Current match: fully opaque bright red.
 fn search_current_color() -> Hsla {
     Hsla {
-        h: 30.0 / 360.0,
-        s: 1.0,
-        l: 0.5,
-        a: 1.0,
+        h: 0.0,
+        s: 0.90,
+        l: 0.50,
+        a: 0.70,
     }
 }
 
@@ -44,9 +45,7 @@ impl Ashell {
 
     pub(crate) fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search_active = true;
-        self.search_input.update(cx, |state, cx| {
-            state.focus_handle(cx).focus(window, cx);
-        });
+        self.refocus_search_input(window, cx);
         cx.notify();
     }
 
@@ -59,12 +58,20 @@ impl Ashell {
         cx.notify();
     }
 
-    pub(crate) fn perform_search(&mut self, cx: &mut Context<Self>) {
+    /// Move keyboard focus back to the search input so the user can keep typing.
+    fn refocus_search_input(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.search_input.update(cx, |state, cx| {
+            state.focus_handle(cx).focus(window, cx);
+        });
+    }
+
+    pub(crate) fn perform_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let query = self.search_input.read(cx).text().to_string();
         if query.is_empty() {
             self.search_query.clear();
             self.search_matches.clear();
             self.search_current = 0;
+            self.refocus_search_input(window, cx);
             cx.notify();
             return;
         }
@@ -74,13 +81,15 @@ impl Ashell {
             .as_ref()
             .and_then(|id| self.tabs.iter().find(|t| &t.id == id))
         else {
+            self.refocus_search_input(window, cx);
             return;
         };
 
         let snapshot = tab.render_snapshot();
         let query_lower = query.to_lowercase();
+        let query_byte_len = query.len();
 
-        // Build per-row strings from cells.
+        // Build per-row cell lists.
         let mut row_cells: Vec<Vec<(i32, char)>> = vec![vec![]; snapshot.rows];
         for rc in &snapshot.cells {
             if rc.row >= 0 && (rc.row as usize) < snapshot.rows {
@@ -97,33 +106,34 @@ impl Ashell {
             if row.is_empty() {
                 continue;
             }
-            // Build text and byte→col mapping.
+
+            // Build text string and byte→column index mapping.
             let mut text = String::with_capacity(row.len());
             let mut byte_to_col: Vec<i32> = Vec::new();
             for &(col, c) in row {
                 text.push(c);
+                // Each byte of this character maps to `col`.
                 while byte_to_col.len() < text.len() {
                     byte_to_col.push(col);
                 }
             }
             let text_lower = text.to_lowercase();
 
-            // Find all occurrences.
+            // Find all occurrences of the query in this row.
             let mut search_start = 0;
             while let Some(pos) = text_lower[search_start..].find(&query_lower) {
                 let abs = search_start + pos;
                 let start_col = byte_to_col[abs];
-                let end_byte = (abs + query.len()).min(byte_to_col.len());
+                let end_byte = (abs + query_byte_len).min(byte_to_col.len());
                 let end_col = byte_to_col[end_byte - 1];
                 for c in start_col..=end_col {
                     matches.push((row_idx as i32, c));
                 }
-                search_start = abs + query.len();
+                search_start = abs + query_byte_len;
             }
         }
 
-        // Count distinct match groups (consecutive cells in same row).
-        let match_count = count_match_groups(&matches, query.len());
+        let match_count = count_match_groups(&matches);
 
         self.search_query = query;
         self.search_matches = matches;
@@ -144,11 +154,14 @@ impl Ashell {
             }
         )
         .into();
+
+        // Keep focus on the search input so the user can continue typing.
+        self.refocus_search_input(window, cx);
         cx.notify();
     }
 
     pub(crate) fn search_goto_next(&mut self, cx: &mut Context<Self>) {
-        let match_count = count_match_groups(&self.search_matches, self.search_query.len());
+        let match_count = count_match_groups(&self.search_matches);
         if match_count == 0 {
             return;
         }
@@ -158,7 +171,7 @@ impl Ashell {
     }
 
     pub(crate) fn search_goto_prev(&mut self, cx: &mut Context<Self>) {
-        let match_count = count_match_groups(&self.search_matches, self.search_query.len());
+        let match_count = count_match_groups(&self.search_matches);
         if match_count == 0 {
             return;
         }
@@ -168,11 +181,9 @@ impl Ashell {
     }
 
     fn jump_to_current_match(&mut self, _cx: &mut Context<Self>) {
-        let Some((target_row, _)) = find_nth_match_start(
-            &self.search_matches,
-            self.search_query.len(),
-            self.search_current,
-        ) else {
+        let Some((target_row, _)) =
+            find_nth_match_start(&self.search_matches, self.search_current)
+        else {
             return;
         };
 
@@ -210,14 +221,12 @@ impl Ashell {
         let match_color = search_match_color();
         let current_color = search_current_color();
 
-        // Iterate match groups and assign colors.
         let mut sorted: Vec<(i32, i32)> = self.search_matches.clone();
         sorted.sort();
 
         let mut group_idx = 0;
         let mut i = 0;
         while i < sorted.len() {
-            let (r, _c) = sorted[i];
             let is_current = group_idx == self.search_current;
             let color = if is_current {
                 current_color
@@ -226,6 +235,7 @@ impl Ashell {
             };
 
             // Color all consecutive cells in this group.
+            let (r, _) = sorted[i];
             let mut j = i;
             while j < sorted.len() && sorted[j].0 == r {
                 if j > i && sorted[j].1 != sorted[j - 1].1 + 1 {
@@ -242,47 +252,17 @@ impl Ashell {
         Some(map)
     }
 
-    pub(crate) fn on_search_key_down(
-        &mut self,
-        event: &gpui::KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let key = event.keystroke.key.as_str();
-        match key {
-            "escape" => {
-                self.close_search(window, cx);
-                window.prevent_default();
-                cx.stop_propagation();
-            }
-            "enter" => {
-                if event.keystroke.modifiers.shift {
-                    self.search_goto_prev(cx);
-                } else if self.search_query.is_empty()
-                    || self.search_input.read(cx).text().to_string() != self.search_query
-                {
-                    self.perform_search(cx);
-                } else {
-                    self.search_goto_next(cx);
-                }
-                window.prevent_default();
-                cx.stop_propagation();
-            }
-            _ => {}
-        }
-    }
-
     pub(crate) fn render_search_bar(
         &mut self,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl gpui::IntoElement {
         if !self.search_active {
-            // Render semi-transparent search button.
+            // Semi-transparent search button in the top-right corner.
             return div()
                 .absolute()
                 .top(px(8.))
-                .right(px(8.))
+                .right(px(24.))
                 .child(
                     Button::new("search-btn")
                         .ghost()
@@ -296,8 +276,8 @@ impl Ashell {
                 .into_any_element();
         }
 
-        // Render expanded search bar.
-        let match_count = count_match_groups(&self.search_matches, self.search_query.len());
+        // Expanded search bar.
+        let match_count = count_match_groups(&self.search_matches);
         let has_query = !self.search_query.is_empty();
         let has_matches = match_count > 0;
         let current_display = if has_matches {
@@ -311,10 +291,23 @@ impl Ashell {
         div()
             .absolute()
             .top(px(8.))
-            .right(px(8.))
+            .right(px(24.))
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                if event.keystroke.key.as_str() == "escape" {
+                let key = event.keystroke.key.as_str();
+                if key == "escape" {
                     this.close_search(window, cx);
+                    window.prevent_default();
+                    cx.stop_propagation();
+                } else if key == "enter" {
+                    if event.keystroke.modifiers.shift {
+                        this.search_goto_prev(cx);
+                    } else if this.search_query.is_empty()
+                        || this.search_input.read(cx).text().to_string() != this.search_query
+                    {
+                        this.perform_search(window, cx);
+                    } else {
+                        this.search_goto_next(cx);
+                    }
                     window.prevent_default();
                     cx.stop_propagation();
                 }
@@ -377,9 +370,11 @@ impl Ashell {
     }
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────
+
 /// Count distinct match groups in a sorted list of (row, col) positions.
 /// A group is a run of consecutive columns in the same row.
-fn count_match_groups(matches: &[(i32, i32)], _query_len: usize) -> usize {
+fn count_match_groups(matches: &[(i32, i32)]) -> usize {
     if matches.is_empty() {
         return 0;
     }
@@ -400,11 +395,7 @@ fn count_match_groups(matches: &[(i32, i32)], _query_len: usize) -> usize {
 }
 
 /// Find the (row, col) start of the Nth distinct match group.
-fn find_nth_match_start(
-    matches: &[(i32, i32)],
-    _query_len: usize,
-    n: usize,
-) -> Option<(i32, i32)> {
+fn find_nth_match_start(matches: &[(i32, i32)], n: usize) -> Option<(i32, i32)> {
     if matches.is_empty() {
         return None;
     }

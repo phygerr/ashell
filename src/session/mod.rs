@@ -804,6 +804,11 @@ impl Ashell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Don't steal focus when the search bar is active — let the search
+        // input keep it so the user can continue typing / clicking buttons.
+        if self.search_active {
+            return;
+        }
         self.focus_handle.focus(window, cx);
         // Check if click is in a different pane and focus it
         let click_pos = event.position;

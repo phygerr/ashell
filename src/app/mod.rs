@@ -374,7 +374,6 @@ impl Ashell {
             cx.subscribe_in(&passphrase_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_path_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_new_folder_input, window, Self::on_input_event),
-            cx.subscribe_in(&search_input, window, Self::on_input_event),
         ];
 
         let (events_tx, events_rx) = mpsc::channel();
@@ -569,18 +568,6 @@ impl Ashell {
                     self.sftp_creating_folder = false;
                 }
                 _ => {}
-            }
-        } else if input == &self.search_input {
-            if let InputEvent::PressEnter { .. } = event {
-                if self.search_query.is_empty()
-                    || self.search_input.read(cx).text().to_string() != self.search_query
-                {
-                    self.perform_search(cx);
-                } else {
-                    self.search_goto_next(cx);
-                }
-                window.prevent_default();
-                cx.stop_propagation();
             }
         }
         cx.notify();

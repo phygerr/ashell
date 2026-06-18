@@ -19,7 +19,8 @@ impl Ashell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // If the search input is focused, let it handle its own keys.
+        // If the search input is focused, skip terminal key processing
+        // so the input can handle text entry, paste, etc. normally.
         if self.search_active
             && self
                 .search_input
@@ -27,7 +28,6 @@ impl Ashell {
                 .focus_handle(cx)
                 .is_focused(window)
         {
-            self.on_search_key_down(event, window, cx);
             return;
         }
 
