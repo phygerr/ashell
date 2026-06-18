@@ -176,17 +176,23 @@ pub(crate) fn sync_macos_launch_environment() {
 pub(crate) fn sync_macos_launch_environment() {}
 
 pub(crate) fn open_main_window(cx: &mut App) {
-    let mut window_options = WindowOptions {
-        titlebar: Some(gpui_component::TitleBar::title_bar_options()),
-        ..Default::default()
-    };
+    let config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
+
+    let mut window_options = WindowOptions::default();
+
+    if config.title_bar_style() == crate::session::config::TitleBarStyle::Integrated {
+        window_options.titlebar = Some(gpui::TitlebarOptions {
+            title: None,
+            appears_transparent: true,
+            traffic_light_position: Some(gpui::point(px(9.0), px(9.0))),
+        });
+    }
 
     #[cfg(not(target_os = "macos"))]
     if let Ok(img) = image::load_from_memory(include_bytes!("../../assets/icons/ashell.png")) {
         window_options.icon = Some(std::sync::Arc::new(img.into_rgba8()));
     }
 
-    let config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
     if let Some(bounds) = config.window_bounds() {
         window_options.window_bounds = Some(match bounds {
             crate::session::config::SavedWindowBounds::Fullscreen {

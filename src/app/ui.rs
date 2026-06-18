@@ -1,12 +1,12 @@
 use gpui::{
     Context, ElementId, Focusable as _, FontWeight, Hsla, InteractiveElement as _, IntoElement,
     MouseButton, MouseDownEvent, ParentElement as _, PathBuilder, Pixels, Render,
-    StatefulInteractiveElement as _, Styled as _, Window, canvas, div, point,
-    prelude::FluentBuilder as _, px, rems, uniform_list,
+    StatefulInteractiveElement as _, Styled as _, Window, canvas, div, hsla,
+    point, prelude::FluentBuilder as _, px, rems, uniform_list,
 };
 use gpui_component::{
-    ActiveTheme, Disableable as _, ElementExt, Icon, IconName, Root, Size, Sizable as _,
-    button::{Button, ButtonVariants as _},
+    ActiveTheme, Disableable as _, ElementExt, Icon, IconName, InteractiveElementExt as _, Root,
+    Size, Sizable as _, button::{Button, ButtonVariants as _},
     checkbox::Checkbox,
     h_flex,
     input::Input,
@@ -1896,6 +1896,58 @@ impl Ashell {
             )
     }
 
+    fn render_window_controls(&self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let is_macos = cfg!(target_os = "macos");
+        let is_fullscreen = window.is_fullscreen();
+
+        h_flex()
+            .flex_none()
+            .items_center()
+            .px_3()
+            .gap_2()
+            .when(!is_macos || is_fullscreen, |this| {
+                this.child(
+                    div()
+                        .id("window-close")
+                        .size(px(12.))
+                        .rounded_full()
+                        .bg(hsla(0.0, 0.8, 0.4, 1.0)) // Red
+                        .on_click(|_, window, _| window.remove_window())
+                        .hover(|s| s.bg(hsla(0.0, 0.8, 0.5, 1.0)))
+                        .active(|s| s.bg(hsla(0.0, 0.8, 0.3, 1.0))),
+                )
+                .child(
+                    div()
+                        .id("window-minimize")
+                        .size(px(12.))
+                        .rounded_full()
+                        .bg(hsla(0.12, 0.8, 0.4, 1.0)) // Yellow
+                        .on_click(|_, window, _| window.minimize_window())
+                        .hover(|s| s.bg(hsla(0.12, 0.8, 0.5, 1.0)))
+                        .active(|s| s.bg(hsla(0.12, 0.8, 0.3, 1.0))),
+                )
+                .child(
+                    div()
+                        .id("window-maximize")
+                        .size(px(12.))
+                        .rounded_full()
+                        .bg(hsla(0.33, 0.8, 0.4, 1.0)) // Green
+                        .on_click(|_, window, _| {
+                            if window.is_fullscreen() {
+                                window.toggle_fullscreen();
+                            } else {
+                                window.zoom_window();
+                            }
+                        })
+                        .hover(|s| s.bg(hsla(0.33, 0.8, 0.5, 1.0)))
+                        .active(|s| s.bg(hsla(0.33, 0.8, 0.3, 1.0))),
+                )
+            })
+            .when(is_macos, |this| {
+                this.when(!is_fullscreen, |this| this.w(px(80.)))
+            })
+    }
+
     fn render_tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let active_tab_index = self
             .active_tab
@@ -1919,150 +1971,137 @@ impl Ashell {
                 (g.id.clone(), g.title.clone(), pane_ids)
             })
             .collect();
-        v_flex()
-            .h(px(32.))
-            .w_full()
-            .flex_none()
-            .bg(cx.theme().tab_bar)
+        let is_integrated =
+            self.active_title_bar_style == crate::session::config::TitleBarStyle::Integrated;
+
+        h_flex()
+            .flex_1()
+            .min_w(px(0.))
+            .h_full()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .h_full()
+                    .when(is_integrated, |this| {
+                        this.window_control_area(gpui::WindowControlArea::Drag)
+                    })
+                    .overflow_x_hidden()
+                    .child({
+                        TabBar::new("ashell-tab-bar")
+                            .track_scroll(&self.tabs_scroll_handle)
+                            .selected_index(selected)
+                            .children(groups_data.iter().enumerate().map(
+                                |(ix, (group_id, title, pane_ids))| {
+                                    let gid = group_id.clone();
+                                    let label = if pane_ids.len() > 1 {
+                                        format!("{} ({})", title, pane_ids.len())
+                                    } else {
+                                        title.clone()
+                                    };
+                                    let close_id = if self.active_group.as_ref() == Some(&gid) {
+                                        self.active_tab.clone().unwrap_or_else(|| {
+                                            pane_ids.first().cloned().unwrap_or_default()
+                                        })
+                                    } else {
+                                        pane_ids.first().cloned().unwrap_or_default()
+                                    };
+
+                                    let dot_color = pane_ids
+                                        .first()
+                                        .and_then(|id| self.tabs.iter().find(|t| t.id == *id))
+                                        .map(|tab| {
+                                            if tab.connected {
+                                                cx.theme().success
+                                            } else {
+                                                cx.theme().danger
+                                            }
+                                        })
+                                        .unwrap_or(cx.theme().success);
+                                    Tab::new()
+                                        .min_w(px(80.))
+                                        .prefix(div().w(px(5.)).h(px(32.)).bg(dot_color))
+                                        .child(
+                                            div()
+                                                .when(ix == selected, |this| {
+                                                    this.font_weight(FontWeight::BOLD)
+                                                        .text_color(cx.theme().primary)
+                                                        .text_base()
+                                                })
+                                                .child(label),
+                                        )
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.activate_group(gid.clone(), window, cx)
+                                        }))
+                                        .suffix(
+                                            Button::new(("tab-close", ix))
+                                                .ghost()
+                                                .xsmall()
+                                                .icon(IconName::Close)
+                                                .mr(px(5.))
+                                                .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                                                    window.prevent_default();
+                                                    cx.stop_propagation();
+                                                })
+                                                .on_click(cx.listener(move |this, _, window, cx| {
+                                                    window.prevent_default();
+                                                    cx.stop_propagation();
+                                                    if !close_id.is_empty() {
+                                                        this.close_tab(close_id.clone(), cx)
+                                                    }
+                                                })),
+                                        )
+                                },
+                            ))
+                            .last_empty_space(div().w_3())
+                            .w_full()
+                            .h_full()
+                    }),
+            )
             .child(
                 h_flex()
-                    .h_full()
-                    .w_full()
+                    .flex_none()
                     .items_center()
-                    .gap_2()
+                    .gap_1()
+                    .pr(px(6.))
                     .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .h_full()
-                            .overflow_x_hidden()
-                            .child({
-                                TabBar::new("ashell-tab-bar")
-                                    .track_scroll(&self.tabs_scroll_handle)
-                                    .selected_index(selected)
-                                    .children(groups_data.iter().enumerate().map(
-                                        |(ix, (group_id, title, pane_ids))| {
-                                            let gid = group_id.clone();
-                                            let label = if pane_ids.len() > 1 {
-                                                format!("{} ({})", title, pane_ids.len())
-                                            } else {
-                                                title.clone()
-                                            };
-                                            let close_id = if self.active_group.as_ref()
-                                                == Some(&gid)
-                                            {
-                                                self.active_tab.clone().unwrap_or_else(|| {
-                                                    pane_ids.first().cloned().unwrap_or_default()
-                                                })
-                                            } else {
-                                                pane_ids.first().cloned().unwrap_or_default()
-                                            };
-                                            let dot_color = pane_ids
-                                                .first()
-                                                .and_then(|id| {
-                                                    self.tabs.iter().find(|t| t.id == *id)
-                                                })
-                                                .map(|tab| {
-                                                    if tab.connected {
-                                                        cx.theme().success
-                                                    } else {
-                                                        cx.theme().danger
-                                                    }
-                                                })
-                                                .unwrap_or(cx.theme().success);
-                                            Tab::new()
-                                                .min_w(px(80.))
-                                                .prefix(div().w(px(5.)).h(px(32.)).bg(dot_color))
-                                                .child(
-                                                    div()
-                                                        .when(ix == selected, |this| {
-                                                            this.font_weight(FontWeight::BOLD)
-                                                                .text_color(cx.theme().primary)
-                                                                .text_base()
-                                                        })
-                                                        .child(label),
-                                                )
-                                                .on_click(cx.listener(
-                                                    move |this, _, window, cx| {
-                                                        this.activate_group(gid.clone(), window, cx)
-                                                    },
-                                                ))
-                                                .suffix(
-                                                    Button::new(("tab-close", ix))
-                                                        .ghost()
-                                                        .xsmall()
-                                                        .icon(IconName::Close)
-                                                        .mr(px(5.))
-                                                        .on_mouse_down(
-                                                            MouseButton::Left,
-                                                            |_, window, cx| {
-                                                                window.prevent_default();
-                                                                cx.stop_propagation();
-                                                            },
-                                                        )
-                                                        .on_click(cx.listener(
-                                                            move |this, _, window, cx| {
-                                                                window.prevent_default();
-                                                                cx.stop_propagation();
-                                                                if !close_id.is_empty() {
-                                                                    this.close_tab(
-                                                                        close_id.clone(),
-                                                                        cx,
-                                                                    )
-                                                                }
-                                                            },
-                                                        )),
-                                                )
-                                        },
-                                    ))
-                                    .last_empty_space(div().w_3())
-                                    .w_full()
-                                    .h_full()
-                            }),
+                        Button::new("open-selector")
+                            .secondary()
+                            .small()
+                            .rounded(px(999.))
+                            .icon(IconName::Plus)
+                            .tooltip(t!("settings_open_session").to_string())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.show_selector_dialog(window, cx)
+                            })),
                     )
                     .child(
-                        h_flex()
-                            .flex_none()
-                            .items_center()
-                            .gap_1()
-                            .pr(px(6.))
-                            .child(
-                                Button::new("open-selector")
-                                    .secondary()
-                                    .small()
-                                    .rounded(px(999.))
-                                    .icon(IconName::Plus)
-                                    .tooltip(t!("settings_open_session").to_string())
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.show_selector_dialog(window, cx)
-                                    })),
-                            )
-                            .child(
-                                Button::new("split-horizontal")
-                                    .secondary()
-                                    .small()
-                                    .rounded(px(999.))
-                                    .icon(IconName::PanelBottom)
-                                    .tooltip(t!("settings_split_pane_down").to_string())
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        window.prevent_default();
-                                        cx.stop_propagation();
-                                        this.split_current_pane("down", cx);
-                                    })),
-                            )
-                            .child(
-                                Button::new("split-vertical")
-                                    .secondary()
-                                    .small()
-                                    .rounded(px(999.))
-                                    .icon(IconName::PanelRight)
-                                    .tooltip(t!("settings_split_pane_right").to_string())
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        window.prevent_default();
-                                        cx.stop_propagation();
-                                        this.split_current_pane("right", cx);
-                                    })),
-                            ),
+                        Button::new("split-horizontal")
+                            .secondary()
+                            .small()
+                            .rounded(px(999.))
+                            .icon(IconName::PanelBottom)
+                            .tooltip(t!("settings_split_pane_down").to_string())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.prevent_default();
+                                cx.stop_propagation();
+                                this.split_current_pane("down", cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("split-vertical")
+                            .secondary()
+                            .small()
+                            .rounded(px(999.))
+                            .icon(IconName::PanelRight)
+                            .tooltip(t!("settings_split_pane_right").to_string())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.prevent_default();
+                                cx.stop_propagation();
+                                this.split_current_pane("right", cx);
+                            })),
                     ),
             )
     }
@@ -2438,6 +2477,21 @@ impl Render for Ashell {
                                 .size_full()
                                 .relative()
                                 .overflow_hidden()
+                                .when(
+                                    self.active_title_bar_style == crate::session::config::TitleBarStyle::Native,
+                                    |this| {
+                                        this.child(
+                                            div()
+                                                .flex_none()
+                                                .h(px(32.))
+                                                .w_full()
+                                                .bg(cx.theme().tab_bar)
+                                                .border_b_1()
+                                                .border_color(cx.theme().border)
+                                                .child(self.render_tab_bar(cx)),
+                                        )
+                                    },
+                                )
                                 .child(body_panel),
                         ),
                 )
@@ -2458,6 +2512,21 @@ impl Render for Ashell {
                     .size_full()
                     .relative()
                     .overflow_hidden()
+                    .when(
+                        self.active_title_bar_style == crate::session::config::TitleBarStyle::Native,
+                        |this| {
+                            this.child(
+                                div()
+                                    .flex_none()
+                                    .h(px(32.))
+                                    .w_full()
+                                    .bg(cx.theme().tab_bar)
+                                    .border_b_1()
+                                    .border_color(cx.theme().border)
+                                    .child(self.render_tab_bar(cx)),
+                            )
+                        },
+                    )
                     .child(body_panel),
             );
 
@@ -2501,11 +2570,31 @@ impl Render for Ashell {
                     this.close_tab(active_id, cx);
                 }
             }))
-            .child(
-                gpui_component::TitleBar::new().child(
-                    div().flex().items_center().w_full().child(self.render_tab_bar(cx)),
-                ),
-            )
+            .when(self.active_title_bar_style == crate::session::config::TitleBarStyle::Integrated, |this| {
+                this.child(
+                    div()
+                        .id("title-bar")
+                        .flex()
+                        .items_center()
+                        .h(px(34.))
+                        .w_full()
+                        .bg(cx.theme().tab_bar)
+                        .on_double_click(|_, window, _| {
+                            #[cfg(target_os = "macos")]
+                            window.titlebar_double_click();
+                            #[cfg(not(target_os = "macos"))]
+                            window.zoom_window();
+                        })
+                        .child(self.render_window_controls(window, cx))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .h_full()
+                                .child(self.render_tab_bar(cx)),
+                        ),
+                )
+            })
             .child(
                 div().flex_1().min_h_0().child(workspace),
             )

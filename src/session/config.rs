@@ -98,6 +98,14 @@ pub enum SavedWindowBounds {
     },
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum TitleBarStyle {
+    Native,
+    #[default]
+    Integrated,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConfigFile {
     #[serde(default = "default_follow_system_theme")]
@@ -120,6 +128,8 @@ pub struct ConfigFile {
     pub ui_font_family: String,
     #[serde(default = "default_terminal_font_family")]
     pub terminal_font_family: String,
+    #[serde(default)]
+    pub title_bar_style: TitleBarStyle,
     #[serde(default)]
     pub sessions: Vec<Session>,
     #[serde(default)]
@@ -404,6 +414,14 @@ impl ConfigStore {
 
     pub fn set_terminal_font_family(&mut self, family: &str) {
         self.cache.terminal_font_family = family.to_string();
+    }
+
+    pub fn title_bar_style(&self) -> TitleBarStyle {
+        self.cache.title_bar_style
+    }
+
+    pub fn set_title_bar_style(&mut self, style: TitleBarStyle) {
+        self.cache.title_bar_style = style;
     }
 
     pub fn show_hidden_files(&self) -> bool {
