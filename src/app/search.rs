@@ -247,8 +247,8 @@ impl Ashell {
             // grid_line → viewport row:  vp_row = grid_line + display_offset
             let (grid_line, _) = sorted[i];
             let vp_row = grid_line + display_offset;
+            let mut j = i;
             if vp_row >= 0 && vp_row < rows {
-                let mut j = i;
                 while j < sorted.len() && sorted[j].0 == grid_line {
                     if j > i && sorted[j].1 != sorted[j - 1].1 + 1 {
                         break;
@@ -258,7 +258,6 @@ impl Ashell {
                 }
             } else {
                 // Outside current viewport — skip.
-                let mut j = i;
                 while j < sorted.len() && sorted[j].0 == grid_line {
                     if j > i && sorted[j].1 != sorted[j - 1].1 + 1 {
                         break;
