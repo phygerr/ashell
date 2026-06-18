@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use gpui::{
-    Context, Focusable as _, Hsla, InteractiveElement as _, ParentElement as _,
-    Styled as _, Window, div, px, rems,
+    Context, Focusable as _, Hsla, IntoElement, InteractiveElement as _, ParentElement as _,
+    Styled as _, Window, div, prelude::FluentBuilder as _, px, rems,
 };
 use gpui_component::{
     ActiveTheme as _, Disableable as _, IconName, Sizable as _,
