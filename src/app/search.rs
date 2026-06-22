@@ -41,6 +41,7 @@ impl Ashell {
         self.search_query.clear();
         self.search_matches.clear();
         self.search_current = 0;
+        self.search_target_tab = None;
         self.search_bar_bounds = None;
         self.focus_handle.focus(window, cx);
         cx.notify();
@@ -96,6 +97,9 @@ impl Ashell {
             cx.notify();
             return;
         };
+
+        // Remember which tab was searched so highlights only appear in that pane.
+        self.search_target_tab = Some(tab.id.clone());
 
         let query_lower = query.to_lowercase();
         let query_byte_len = query.len();
@@ -232,13 +236,18 @@ impl Ashell {
     }
 
     /// Build a highlight map for search matches, converting grid line indices
-    /// to the current viewport coordinates.
+    /// to the current viewport coordinates. Only returns highlights for the
+    /// pane that was actually searched (`search_target_tab`).
     pub(crate) fn search_highlight_map(
         &self,
+        tab_id: &str,
         match_color: Hsla,
         current_color: Hsla,
     ) -> Option<HashMap<(i32, i32), Hsla>> {
-        if self.search_matches.is_empty() || self.search_query.is_empty() {
+        if self.search_matches.is_empty()
+            || self.search_query.is_empty()
+            || self.search_target_tab.as_deref() != Some(tab_id)
+        {
             return None;
         }
 

@@ -2261,6 +2261,7 @@ impl Ashell {
                         line_height,
                         cell_width,
                         this.search_highlight_map(
+                            tab_id,
                             cx.theme().danger.opacity(0.35),
                             cx.theme().danger.opacity(0.70),
                         ),

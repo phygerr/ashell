@@ -1068,6 +1068,7 @@ impl Ashell {
                     self.search_query.clear();
                     self.search_matches.clear();
                     self.search_current = 0;
+                    self.search_target_tab = None;
                 }
             }
         }
@@ -1360,6 +1361,7 @@ impl Ashell {
                 self.search_query.clear();
                 self.search_matches.clear();
                 self.search_current = 0;
+                self.search_target_tab = None;
             }
         }
     }

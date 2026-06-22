@@ -293,6 +293,7 @@ pub(crate) struct Ashell {
     pub(crate) search_query: String,
     pub(crate) search_matches: Vec<(i32, i32)>,
     pub(crate) search_current: usize,
+    pub(crate) search_target_tab: Option<String>,
     pub(crate) search_bar_bounds: Option<Bounds<Pixels>>,
 
     pub(crate) system_tab_id: Option<String>,
@@ -609,6 +610,7 @@ impl Ashell {
             search_query: String::new(),
             search_matches: Vec::new(),
             search_current: 0,
+            search_target_tab: None,
             search_bar_bounds: None,
 
             system_tab_id: None,
