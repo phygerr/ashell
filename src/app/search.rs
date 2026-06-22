@@ -5,7 +5,7 @@ use gpui::{
     ParentElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px, rems,
 };
 use gpui_component::{
-    ActiveTheme as _, Disableable as _, IconName, Sizable as _,
+    ActiveTheme as _, Disableable as _, ElementExt as _, IconName, Sizable as _,
     button::{Button, ButtonVariants as _},
     h_flex, input::Input,
 };
