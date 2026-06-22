@@ -7,6 +7,7 @@ mod app;
 mod backend;
 mod session;
 mod sftp;
+mod sync;
 mod system;
 mod terminal;
 

@@ -266,6 +266,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "argon2"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c3610892ee6e0cbce8ae2700349fcf8f98adb0dbfbee85aec3c9179d29cc072"
+dependencies = [
+ "base64ct",
+ "blake2",
+ "cpufeatures",
+ "password-hash",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -307,7 +319,10 @@ version = "0.4.6"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
+ "argon2",
  "async-trait",
+ "base64",
+ "chacha20poly1305",
  "chrono",
  "directories",
  "flate2",
@@ -316,11 +331,15 @@ dependencies = [
  "gpui-component",
  "gpui-component-assets",
  "gpui_platform",
+ "hex",
+ "hmac",
  "image",
  "menu",
  "notify 6.1.1",
  "open",
  "portable-pty",
+ "rand 0.8.6",
+ "reqwest",
  "rfd",
  "russh",
  "russh-keys",
@@ -328,6 +347,7 @@ dependencies = [
  "rust-i18n 3.1.5",
  "serde",
  "serde_json",
+ "sha2",
  "ssh-key",
  "sys-locale",
  "sysinfo 0.33.1",
@@ -843,6 +863,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake2"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
+dependencies = [
+ "digest",
+]
+
+[[package]]
 name = "block"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1092,6 +1121,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "chacha20poly1305"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35"
+dependencies = [
+ "aead",
+ "chacha20",
+ "cipher",
+ "poly1305",
+ "zeroize",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1201,9 +1243,8 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
- "gpui_util",
  "indexmap",
  "rustc-hash 2.1.2",
 ]
@@ -1698,7 +1739,7 @@ dependencies = [
 [[package]]
 name = "derive_refineable"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2682,7 +2723,7 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -2712,7 +2753,6 @@ dependencies = [
  "gpui_macros",
  "gpui_shared_string",
  "gpui_util",
- "heapless",
  "http_client",
  "image",
  "inventory",
@@ -2832,7 +2872,7 @@ dependencies = [
 [[package]]
 name = "gpui_linux"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -2883,7 +2923,7 @@ dependencies = [
 [[package]]
 name = "gpui_macos"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -2928,7 +2968,7 @@ dependencies = [
 [[package]]
 name = "gpui_macros"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -2939,7 +2979,7 @@ dependencies = [
 [[package]]
 name = "gpui_platform"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "console_error_panic_hook",
  "gpui",
@@ -2952,7 +2992,7 @@ dependencies = [
 [[package]]
 name = "gpui_shared_string"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "schemars",
  "serde",
@@ -2962,7 +3002,7 @@ dependencies = [
 [[package]]
 name = "gpui_util"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "anyhow",
  "log",
@@ -2971,7 +3011,7 @@ dependencies = [
 [[package]]
 name = "gpui_web"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -2995,7 +3035,7 @@ dependencies = [
 [[package]]
 name = "gpui_wgpu"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -3024,7 +3064,7 @@ dependencies = [
 [[package]]
 name = "gpui_windows"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "accesskit",
  "accesskit_windows",
@@ -3273,7 +3313,7 @@ dependencies = [
 [[package]]
 name = "http_client"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3336,6 +3376,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -3344,13 +3385,16 @@ version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0"
 dependencies = [
+ "base64",
  "bytes",
  "futures-channel",
  "futures-util",
  "http",
  "http-body",
  "hyper",
+ "ipnet",
  "libc",
+ "percent-encoding",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -4146,7 +4190,7 @@ checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
 [[package]]
 name = "media"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "anyhow",
  "bindgen",
@@ -4194,7 +4238,7 @@ dependencies = [
 [[package]]
 name = "menu"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "gpui",
 ]
@@ -5015,6 +5059,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "password-hash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "346f04948ba92c43e8469c1ee6736c7563d71012b17d40745260fe106aac2166"
+dependencies = [
+ "base64ct",
+ "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5079,7 +5134,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 [[package]]
 name = "perf"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "collections",
  "serde",
@@ -5861,7 +5916,7 @@ dependencies = [
 [[package]]
 name = "refineable"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "derive_refineable",
 ]
@@ -5900,6 +5955,44 @@ name = "renderdoc-sys"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
+
+[[package]]
+name = "reqwest"
+version = "0.12.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
+dependencies = [
+ "base64",
+ "bytes",
+ "futures-core",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "js-sys",
+ "log",
+ "percent-encoding",
+ "pin-project-lite",
+ "quinn",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sync_wrapper",
+ "tokio",
+ "tokio-rustls",
+ "tower",
+ "tower-http",
+ "tower-service",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "webpki-roots",
+]
 
 [[package]]
 name = "resvg"
@@ -6477,7 +6570,7 @@ dependencies = [
 [[package]]
 name = "scheduler"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "async-task",
  "backtrace",
@@ -7216,7 +7309,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sum_tree"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "heapless",
  "log",
@@ -7855,6 +7948,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "tower-http"
+version = "0.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
+dependencies = [
+ "bitflags 2.12.1",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "pin-project-lite",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "url",
+]
+
+[[package]]
 name = "tower-layer"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8182,7 +8293,7 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 [[package]]
 name = "util"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "anyhow",
  "async-fs",
@@ -8221,7 +8332,7 @@ dependencies = [
 [[package]]
 name = "util_macros"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "perf",
  "quote",
@@ -8613,6 +8724,15 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
@@ -10098,7 +10218,7 @@ dependencies = [
 [[package]]
 name = "zlog"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -10127,7 +10247,7 @@ dependencies = [
 [[package]]
 name = "ztracing"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 dependencies = [
  "tracing",
  "tracing-subscriber",
@@ -10138,7 +10258,7 @@ dependencies = [
 [[package]]
 name = "ztracing_macro"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#dde98fa822c59028475850f242a4827ba770e24a"
+source = "git+https://github.com/zed-industries/zed#969a67fcfbf799e68ab00854028228274be847e8"
 
 [[package]]
 name = "zune-core"

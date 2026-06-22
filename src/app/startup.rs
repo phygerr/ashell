@@ -251,17 +251,7 @@ pub(crate) fn open_main_window(cx: &mut App) {
         let focus_handle = view.read(cx).focus_handle.clone();
         window.focus(&focus_handle, cx);
 
-        let sftp_minimized = view.read(cx).config.sftp_panel_minimized();
-        if sftp_minimized {
-            window.defer(cx, {
-                let view = view.clone();
-                move |window, cx| {
-                    view.update(cx, |this, cx| {
-                        this.toggle_sftp_minimized(window, cx);
-                    });
-                }
-            });
-        }
+
 
         let workspace_panels_clone = view.read(cx).workspace_panels.clone();
         let body_panels_clone = view.read(cx).body_panels.clone();
@@ -271,60 +261,73 @@ pub(crate) fn open_main_window(cx: &mut App) {
                 tracing::info!("[ui] layout was reset, skipping save layout state.");
                 return true;
             }
-            tracing::info!("[ui] main application window closed, saving layout state...");
-            let mut config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
             let current_bounds = window.window_bounds();
-            let saved_bounds = match current_bounds {
-                gpui::WindowBounds::Fullscreen(b) => {
-                    crate::session::config::SavedWindowBounds::Fullscreen {
-                        x: b.origin.x.into(),
-                        y: b.origin.y.into(),
-                        width: b.size.width.into(),
-                        height: b.size.height.into(),
-                    }
-                }
-                gpui::WindowBounds::Maximized(b) => {
-                    crate::session::config::SavedWindowBounds::Maximized {
-                        x: b.origin.x.into(),
-                        y: b.origin.y.into(),
-                        width: b.size.width.into(),
-                        height: b.size.height.into(),
-                    }
-                }
-                gpui::WindowBounds::Windowed(b) => {
-                    crate::session::config::SavedWindowBounds::Windowed {
-                        x: b.origin.x.into(),
-                        y: b.origin.y.into(),
-                        width: b.size.width.into(),
-                        height: b.size.height.into(),
-                    }
-                }
+            let bounds = match current_bounds {
+                gpui::WindowBounds::Fullscreen(b) => b,
+                gpui::WindowBounds::Maximized(b) => b,
+                gpui::WindowBounds::Windowed(b) => b,
             };
-            let workspace_sizes: Vec<f32> = workspace_panels_clone
-                .read(cx)
-                .sizes()
-                .iter()
-                .map(|s| s.into())
-                .collect();
-            let mut body_sizes: Vec<f32> = body_panels_clone
-                .read(cx)
-                .sizes()
-                .iter()
-                .map(|s| s.into())
-                .collect();
+            let size = bounds.size;
+            if size.width.as_f32() > 400.0 && size.height.as_f32() > 300.0 {
+                tracing::info!("[ui] main application window closed, saving layout state...");
+                let mut config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
+                let saved_bounds = match current_bounds {
+                    gpui::WindowBounds::Fullscreen(b) => {
+                        crate::session::config::SavedWindowBounds::Fullscreen {
+                            x: b.origin.x.into(),
+                            y: b.origin.y.into(),
+                            width: b.size.width.into(),
+                            height: b.size.height.into(),
+                        }
+                    }
+                    gpui::WindowBounds::Maximized(b) => {
+                        crate::session::config::SavedWindowBounds::Maximized {
+                            x: b.origin.x.into(),
+                            y: b.origin.y.into(),
+                            width: b.size.width.into(),
+                            height: b.size.height.into(),
+                        }
+                    }
+                    gpui::WindowBounds::Windowed(b) => {
+                        crate::session::config::SavedWindowBounds::Windowed {
+                            x: b.origin.x.into(),
+                            y: b.origin.y.into(),
+                            width: b.size.width.into(),
+                            height: b.size.height.into(),
+                        }
+                    }
+                };
+                let workspace_sizes: Vec<f32> = workspace_panels_clone
+                    .read(cx)
+                    .sizes()
+                    .iter()
+                    .map(|s| s.into())
+                    .collect();
+                let mut body_sizes: Vec<f32> = body_panels_clone
+                    .read(cx)
+                    .sizes()
+                    .iter()
+                    .map(|s| s.into())
+                    .collect();
 
-            if view_clone.read(cx).sftp_panel_minimized {
-                if let Some(prev) = view_clone.read(cx).prev_monitoring_size {
-                    if body_sizes.len() > 1 {
-                        body_sizes[1] = prev.into();
+                if view_clone.read(cx).sftp_panel_minimized {
+                    if let Some(prev) = view_clone.read(cx).prev_monitoring_size {
+                        if body_sizes.len() > 1 {
+                            body_sizes[1] = prev.into();
+                        }
                     }
                 }
-            }
 
-            config.set_layout_state(Some(saved_bounds), Some(workspace_sizes), Some(body_sizes));
-            config.set_sidebar_collapsed(view_clone.read(cx).sidebar_collapsed);
-            config.set_sftp_panel_minimized(view_clone.read(cx).sftp_panel_minimized);
-            let _ = config.save();
+                config.set_layout_state(Some(saved_bounds), Some(workspace_sizes), Some(body_sizes));
+                config.set_sidebar_collapsed(view_clone.read(cx).sidebar_collapsed);
+                config.set_sftp_panel_minimized(view_clone.read(cx).sftp_panel_minimized);
+                let _ = config.save();
+            } else {
+                tracing::warn!(
+                    "[ui] window size is too small ({:?}), skipping save layout state to prevent corrupting saved bounds.",
+                    size
+                );
+            }
             true
         });
 

@@ -1,3 +1,4 @@
+pub mod config_sync;
 pub mod constants;
 pub mod dialogs;
 pub mod keybinding_recorder;
@@ -209,6 +210,19 @@ pub(crate) struct Ashell {
     pub(crate) key_path_input: Entity<InputState>,
     pub(crate) key_inline_input: Entity<InputState>,
     pub(crate) passphrase_input: Entity<InputState>,
+    pub(crate) sync_endpoint_input: Entity<InputState>,
+    pub(crate) sync_username_input: Entity<InputState>,
+    pub(crate) sync_webdav_password_input: Entity<InputState>,
+    pub(crate) sync_s3_endpoint_input: Entity<InputState>,
+    pub(crate) sync_s3_region_input: Entity<InputState>,
+    pub(crate) sync_s3_bucket_input: Entity<InputState>,
+    pub(crate) sync_s3_object_key_input: Entity<InputState>,
+    pub(crate) sync_s3_access_key_input: Entity<InputState>,
+    pub(crate) sync_s3_secret_key_input: Entity<InputState>,
+    pub(crate) sync_s3_session_token_input: Entity<InputState>,
+    pub(crate) sync_encryption_password_input: Entity<InputState>,
+    pub(crate) sync_in_progress: bool,
+    pub(crate) sync_status: SharedString,
     pub(crate) sftp_path_input: Entity<InputState>,
     pub(crate) ssh_auth_method: AuthMethod,
     pub(crate) editing_session_id: Option<String>,
@@ -361,8 +375,67 @@ impl Ashell {
         let sftp_path_input = cx.new(|cx| InputState::new(window, cx).default_value("/"));
         let sftp_new_folder_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("new_folder").to_string()));
+<<<<<<< HEAD
         let search_input = cx.new(|cx| {
             InputState::new(window, cx).placeholder(t!("search").to_string())
+=======
+        let config = ConfigStore::load().unwrap_or_else(|err| {
+            tracing::warn!("failed to load config: {err:#}");
+            ConfigStore::in_memory()
+        });
+        let sync_endpoint_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("https://dav.example.com/ashell/")
+                .default_value(config.sync_endpoint())
+        });
+        let sync_username_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("sync_username").to_string())
+                .default_value(config.sync_username())
+        });
+        let sync_webdav_password_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("sync_webdav_password").to_string())
+                .masked(true)
+        });
+        let sync_s3_endpoint_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("https://s3.example.com")
+                .default_value(config.sync_s3_endpoint())
+        });
+        let sync_s3_region_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("us-east-1")
+                .default_value(config.sync_s3_region())
+        });
+        let sync_s3_bucket_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("sync_s3_bucket").to_string())
+                .default_value(config.sync_s3_bucket())
+        });
+        let sync_s3_object_key_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("ashell-sync.json")
+                .default_value(config.sync_s3_object_key())
+        });
+        let sync_s3_access_key_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(t!("sync_s3_access_key").to_string())
+        });
+        let sync_s3_secret_key_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("sync_s3_secret_key").to_string())
+                .masked(true)
+        });
+        let sync_s3_session_token_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("sync_s3_session_token").to_string())
+                .masked(true)
+        });
+        let sync_encryption_password_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("sync_encryption_password").to_string())
+                .masked(true)
+>>>>>>> 59df2b5a9abee2212066af16cd91a493da1db22b
         });
 
         let _subscriptions = vec![
@@ -376,7 +449,25 @@ impl Ashell {
             cx.subscribe_in(&passphrase_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_path_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_new_folder_input, window, Self::on_input_event),
+<<<<<<< HEAD
             cx.subscribe_in(&search_input, window, Self::on_input_event),
+=======
+            cx.subscribe_in(&sync_endpoint_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_username_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_webdav_password_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_s3_endpoint_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_s3_region_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_s3_bucket_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_s3_object_key_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_s3_access_key_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_s3_secret_key_input, window, Self::on_input_event),
+            cx.subscribe_in(&sync_s3_session_token_input, window, Self::on_input_event),
+            cx.subscribe_in(
+                &sync_encryption_password_input,
+                window,
+                Self::on_input_event,
+            ),
+>>>>>>> 59df2b5a9abee2212066af16cd91a493da1db22b
         ];
 
         let (events_tx, events_rx) = mpsc::channel();
@@ -386,10 +477,6 @@ impl Ashell {
         let system = system_sampler.sample();
         let default_light_theme_name = ThemeRegistry::global(cx).default_light_theme().name.clone();
         let default_dark_theme_name = ThemeRegistry::global(cx).default_dark_theme().name.clone();
-        let config = ConfigStore::load().unwrap_or_else(|err| {
-            tracing::warn!("failed to load config: {err:#}");
-            ConfigStore::in_memory()
-        });
         let follow_system_theme = config.follow_system_theme();
 
         let theme_mode = match config.theme_mode() {
@@ -433,6 +520,19 @@ impl Ashell {
             key_path_input,
             key_inline_input,
             passphrase_input,
+            sync_endpoint_input,
+            sync_username_input,
+            sync_webdav_password_input,
+            sync_s3_endpoint_input,
+            sync_s3_region_input,
+            sync_s3_bucket_input,
+            sync_s3_object_key_input,
+            sync_s3_access_key_input,
+            sync_s3_secret_key_input,
+            sync_s3_session_token_input,
+            sync_encryption_password_input,
+            sync_in_progress: false,
+            sync_status: t!("sync_not_run").into(),
             sftp_path_input,
             ssh_auth_method: AuthMethod::Password,
             editing_session_id: None,
@@ -490,7 +590,7 @@ impl Ashell {
             terminal_marked_text: None,
             dragging_splitter: None,
             drag_split_origin: None,
-            sftp_panel_minimized: false,
+            sftp_panel_minimized: config.sftp_panel_minimized(),
             sidebar_collapsed: config.sidebar_collapsed(),
             collapsed_saved_scroll_handle: gpui::ScrollHandle::new(),
             prev_monitoring_size: None,
@@ -828,6 +928,32 @@ impl Ashell {
                 BackendEvent::TerminalTitleChanged { tab_id, title } => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
                         tab.title = title.clone();
+                    }
+                }
+                BackendEvent::SyncFinished(result) => {
+                    self.sync_in_progress = false;
+                    match result {
+                        crate::sync::SyncResult::Uploaded { etag } => {
+                            if etag.is_some() {
+                                self.config.set_sync_etag(etag);
+                            }
+                            self.sync_status = t!("sync_upload_complete").into();
+                            let _ = self.config.save();
+                        }
+                        crate::sync::SyncResult::Downloaded { payload, etag } => {
+                            self.config.replace_sessions(payload.sessions);
+                            self.config.set_sync_etag(etag);
+                            match self.config.save() {
+                                Ok(()) => self.sync_status = t!("sync_download_complete").into(),
+                                Err(err) => {
+                                    self.sync_status =
+                                        format!("{}: {err:#}", t!("sync_failed")).into()
+                                }
+                            }
+                        }
+                        crate::sync::SyncResult::Failed(error) => {
+                            self.sync_status = format!("{}: {error}", t!("sync_failed")).into();
+                        }
                     }
                 }
             }

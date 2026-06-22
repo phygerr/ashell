@@ -150,10 +150,38 @@ pub struct ConfigFile {
     pub sftp_panel_minimized: bool,
     #[serde(default)]
     pub key_bindings: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub sync_endpoint: String,
+    #[serde(default)]
+    pub sync_username: String,
+    #[serde(default)]
+    pub sync_etag: Option<String>,
+    #[serde(default)]
+    pub sync_device_id: String,
+    #[serde(default)]
+    pub sync_backend: String,
+    #[serde(default)]
+    pub sync_etag_backend: String,
+    #[serde(default)]
+    pub sync_s3_endpoint: String,
+    #[serde(default = "default_s3_region")]
+    pub sync_s3_region: String,
+    #[serde(default)]
+    pub sync_s3_bucket: String,
+    #[serde(default = "default_s3_object_key")]
+    pub sync_s3_object_key: String,
 }
 
 fn default_monitoring_position() -> String {
     "Sidebar".to_string()
+}
+
+fn default_s3_region() -> String {
+    "us-east-1".to_string()
+}
+
+fn default_s3_object_key() -> String {
+    "ashell-sync.json".to_string()
 }
 
 fn default_follow_system_theme() -> bool {
@@ -208,7 +236,7 @@ impl ConfigStore {
             let _ = fs::create_dir_all(&tmp_dir);
         }
 
-        let cache = if path.exists() {
+        let mut cache = if path.exists() {
             let raw = fs::read_to_string(&path)
                 .with_context(|| format!("failed to read {}", path.display()))?;
             match serde_json::from_str::<ConfigFile>(&raw) {
@@ -235,13 +263,20 @@ impl ConfigStore {
             ConfigFile::default()
         };
 
+        if cache.sync_device_id.is_empty() {
+            cache.sync_device_id = Uuid::new_v4().to_string();
+        }
         Ok(Self { path, cache })
     }
 
     pub fn in_memory() -> Self {
+        let cache = ConfigFile {
+            sync_device_id: Uuid::new_v4().to_string(),
+            ..ConfigFile::default()
+        };
         Self {
             path: PathBuf::new(),
-            cache: ConfigFile::default(),
+            cache,
         }
     }
 
@@ -256,6 +291,79 @@ impl ConfigStore {
 
     pub fn sessions(&self) -> &[Session] {
         &self.cache.sessions
+    }
+
+    pub fn replace_sessions(&mut self, sessions: Vec<Session>) {
+        self.cache.sessions = sessions;
+    }
+
+    pub fn sync_endpoint(&self) -> &str {
+        &self.cache.sync_endpoint
+    }
+
+    pub fn sync_username(&self) -> &str {
+        &self.cache.sync_username
+    }
+
+    pub fn sync_etag(&self) -> Option<&str> {
+        (self.cache.sync_etag_backend == self.sync_backend())
+            .then_some(self.cache.sync_etag.as_deref())
+            .flatten()
+    }
+
+    pub fn sync_device_id(&self) -> &str {
+        &self.cache.sync_device_id
+    }
+
+    pub fn sync_backend(&self) -> &str {
+        if self.cache.sync_backend == "s3" {
+            "s3"
+        } else {
+            "webdav"
+        }
+    }
+
+    pub fn set_sync_backend(&mut self, backend: &str) {
+        self.cache.sync_backend = if backend == "s3" { "s3" } else { "webdav" }.to_string();
+    }
+
+    pub fn sync_s3_endpoint(&self) -> &str {
+        &self.cache.sync_s3_endpoint
+    }
+
+    pub fn sync_s3_region(&self) -> &str {
+        if self.cache.sync_s3_region.is_empty() { "us-east-1" } else { &self.cache.sync_s3_region }
+    }
+
+    pub fn sync_s3_bucket(&self) -> &str {
+        &self.cache.sync_s3_bucket
+    }
+
+    pub fn sync_s3_object_key(&self) -> &str {
+        if self.cache.sync_s3_object_key.is_empty() { "ashell-sync.json" } else { &self.cache.sync_s3_object_key }
+    }
+
+    pub fn set_sync_connection(&mut self, endpoint: String, username: String) {
+        self.cache.sync_endpoint = endpoint;
+        self.cache.sync_username = username;
+    }
+
+    pub fn set_sync_s3_connection(
+        &mut self,
+        endpoint: String,
+        region: String,
+        bucket: String,
+        object_key: String,
+    ) {
+        self.cache.sync_s3_endpoint = endpoint;
+        self.cache.sync_s3_region = region;
+        self.cache.sync_s3_bucket = bucket;
+        self.cache.sync_s3_object_key = object_key;
+    }
+
+    pub fn set_sync_etag(&mut self, etag: Option<String>) {
+        self.cache.sync_etag = etag;
+        self.cache.sync_etag_backend = self.sync_backend().to_string();
     }
 
     pub fn tmp_dir(&self) -> Option<PathBuf> {

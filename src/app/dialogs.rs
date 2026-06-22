@@ -1094,6 +1094,17 @@ impl Ashell {
                         use gpui::IntoElement;
                         let version = env!("CARGO_PKG_VERSION");
                         let view_clone_for_general = view.clone();
+                        let sync_endpoint_input = view.read(cx).sync_endpoint_input.clone();
+                        let sync_username_input = view.read(cx).sync_username_input.clone();
+                        let sync_webdav_password_input = view.read(cx).sync_webdav_password_input.clone();
+                        let sync_s3_endpoint_input = view.read(cx).sync_s3_endpoint_input.clone();
+                        let sync_s3_region_input = view.read(cx).sync_s3_region_input.clone();
+                        let sync_s3_bucket_input = view.read(cx).sync_s3_bucket_input.clone();
+                        let sync_s3_object_key_input = view.read(cx).sync_s3_object_key_input.clone();
+                        let sync_s3_access_key_input = view.read(cx).sync_s3_access_key_input.clone();
+                        let sync_s3_secret_key_input = view.read(cx).sync_s3_secret_key_input.clone();
+                        let sync_s3_session_token_input = view.read(cx).sync_s3_session_token_input.clone();
+                        let sync_encryption_password_input = view.read(cx).sync_encryption_password_input.clone();
 
                         let focus_handle = view.read(cx).focus_handle.clone();
 
@@ -1646,6 +1657,76 @@ impl Ashell {
                                                         })
                                                     ).description(t!("reset_layout_hint").to_string())
                                                 )
+                                        )
+                                )
+                                .page(
+                                    SettingPage::new(t!("settings_sync").to_string())
+                                        .icon(IconName::Globe)
+                                        .group(
+                                            SettingGroup::new()
+                                                .title(t!("settings_sync").to_string())
+                                                .item(SettingItem::render({
+                                                    let view = view.clone();
+                                                    let endpoint = sync_endpoint_input.clone();
+                                                    let username = sync_username_input.clone();
+                                                    let webdav_password = sync_webdav_password_input.clone();
+                                                    let s3_endpoint = sync_s3_endpoint_input.clone();
+                                                    let s3_region = sync_s3_region_input.clone();
+                                                    let s3_bucket = sync_s3_bucket_input.clone();
+                                                    let s3_object_key = sync_s3_object_key_input.clone();
+                                                    let s3_access_key = sync_s3_access_key_input.clone();
+                                                    let s3_secret_key = sync_s3_secret_key_input.clone();
+                                                    let s3_session_token = sync_s3_session_token_input.clone();
+                                                    let encryption_password = sync_encryption_password_input.clone();
+                                                    move |_, window, cx| {
+                                                        let in_progress = view.read(cx).sync_in_progress;
+                                                        let status = view.read(cx).sync_status.clone();
+                                                        let is_s3 = view.read(cx).config.sync_backend() == "s3";
+                                                        v_flex()
+                                                            .w_full()
+                                                            .gap_3()
+                                                            .child(
+                                                                h_flex()
+                                                                    .gap_2()
+                                                                    .child(
+                                                                        Button::new("sync-backend-webdav")
+                                                                            .small()
+                                                                            .label("WebDAV")
+                                                                            .when(!is_s3, |button| button.primary())
+                                                                            .on_click(window.listener_for(&view, |this, _, _, cx| this.set_sync_backend("webdav", cx)))
+                                                                    )
+                                                                    .child(
+                                                                        Button::new("sync-backend-s3")
+                                                                            .small()
+                                                                            .label("S3")
+                                                                            .when(is_s3, |button| button.primary())
+                                                                            .on_click(window.listener_for(&view, |this, _, _, cx| this.set_sync_backend("s3", cx)))
+                                                                    )
+                                                            )
+                                                            .when(!is_s3, |this| this
+                                                                .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_endpoint").to_string())).child(Input::new(&endpoint).w_full()))
+                                                                .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_username").to_string())).child(Input::new(&username).w_full()))
+                                                                .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_webdav_password").to_string())).child(Input::new(&webdav_password).w_full())))
+                                                            .when(is_s3, |this| this
+                                                                .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_s3_endpoint").to_string())).child(Input::new(&s3_endpoint).w_full()))
+                                                                .child(h_flex().gap_2()
+                                                                    .child(v_flex().flex_1().gap_1().child(div().text_sm().child(t!("sync_s3_region").to_string())).child(Input::new(&s3_region).w_full()))
+                                                                    .child(v_flex().flex_1().gap_1().child(div().text_sm().child(t!("sync_s3_bucket").to_string())).child(Input::new(&s3_bucket).w_full())))
+                                                                .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_s3_object_key").to_string())).child(Input::new(&s3_object_key).w_full()))
+                                                                .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_s3_access_key").to_string())).child(Input::new(&s3_access_key).w_full()))
+                                                                .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_s3_secret_key").to_string())).child(Input::new(&s3_secret_key).w_full()))
+                                                                .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_s3_session_token").to_string())).child(Input::new(&s3_session_token).w_full())))
+                                                            .child(v_flex().gap_1().child(div().text_sm().child(t!("sync_encryption_password").to_string())).child(Input::new(&encryption_password).w_full()))
+                                                            .child(div().text_sm().text_color(cx.theme().muted_foreground).child(t!("sync_security_hint").to_string()))
+                                                            .child(
+                                                                h_flex()
+                                                                    .gap_2()
+                                                                    .child(Button::new("sync-download").small().disabled(in_progress).label(t!("sync_download").to_string()).on_click(window.listener_for(&view, |this, _, _, cx| this.download_sync_config(cx))))
+                                                                    .child(Button::new("sync-upload").small().disabled(in_progress).label(t!("sync_upload").to_string()).on_click(window.listener_for(&view, |this, _, _, cx| this.upload_sync_config(cx)))),
+                                                            )
+                                                            .child(div().text_sm().text_color(cx.theme().muted_foreground).child(status))
+                                                    }
+                                                }))
                                         )
                                 )
                                 .page({
