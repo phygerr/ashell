@@ -375,10 +375,9 @@ impl Ashell {
         let sftp_path_input = cx.new(|cx| InputState::new(window, cx).default_value("/"));
         let sftp_new_folder_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("new_folder").to_string()));
-<<<<<<< HEAD
         let search_input = cx.new(|cx| {
             InputState::new(window, cx).placeholder(t!("search").to_string())
-=======
+        });
         let config = ConfigStore::load().unwrap_or_else(|err| {
             tracing::warn!("failed to load config: {err:#}");
             ConfigStore::in_memory()
@@ -435,8 +434,6 @@ impl Ashell {
             InputState::new(window, cx)
                 .placeholder(t!("sync_encryption_password").to_string())
                 .masked(true)
->>>>>>> 59df2b5a9abee2212066af16cd91a493da1db22b
-        });
 
         let _subscriptions = vec![
             cx.subscribe_in(&host_input, window, Self::on_input_event),
@@ -449,9 +446,7 @@ impl Ashell {
             cx.subscribe_in(&passphrase_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_path_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_new_folder_input, window, Self::on_input_event),
-<<<<<<< HEAD
             cx.subscribe_in(&search_input, window, Self::on_input_event),
-=======
             cx.subscribe_in(&sync_endpoint_input, window, Self::on_input_event),
             cx.subscribe_in(&sync_username_input, window, Self::on_input_event),
             cx.subscribe_in(&sync_webdav_password_input, window, Self::on_input_event),
@@ -467,7 +462,6 @@ impl Ashell {
                 window,
                 Self::on_input_event,
             ),
->>>>>>> 59df2b5a9abee2212066af16cd91a493da1db22b
         ];
 
         let (events_tx, events_rx) = mpsc::channel();
