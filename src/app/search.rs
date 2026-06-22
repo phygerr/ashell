@@ -317,6 +317,7 @@ impl Ashell {
             })
             .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
                 this.refocus_search_input(window, cx);
+                cx.stop_propagation();
             }))
             .child(
                 h_flex()
