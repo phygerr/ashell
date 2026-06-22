@@ -434,6 +434,7 @@ impl Ashell {
             InputState::new(window, cx)
                 .placeholder(t!("sync_encryption_password").to_string())
                 .masked(true)
+        });
 
         let _subscriptions = vec![
             cx.subscribe_in(&host_input, window, Self::on_input_event),
