@@ -69,12 +69,25 @@ impl Ashell {
             return;
         }
 
-        let Some(tab) = self
+        // Find the active tab — try active_tab first, then fall back to the
+        // first tab in the active group, then any tab.
+        let tab = self
             .active_tab
             .as_ref()
             .and_then(|id| self.tabs.iter().find(|t| &t.id == id))
-        else {
+            .or_else(|| {
+                self.active_group
+                    .as_ref()
+                    .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
+                    .and_then(|g| g.pane_root.tab_ids().first())
+                    .and_then(|id| self.tabs.iter().find(|t| t.id == *id))
+            })
+            .or_else(|| self.tabs.first());
+
+        let Some(tab) = tab else {
+            self.status = t!("no_results").into();
             self.refocus_search_input(window, cx);
+            cx.notify();
             return;
         };
 
@@ -175,11 +188,20 @@ impl Ashell {
             return;
         };
 
-        if let Some(tab) = self
+        let tab = self
             .active_tab
             .as_ref()
             .and_then(|id| self.tabs.iter_mut().find(|t| &t.id == id))
-        {
+            .or_else(|| {
+                self.active_group
+                    .as_ref()
+                    .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
+                    .and_then(|g| g.pane_root.tab_ids().first())
+                    .and_then(|id| self.tabs.iter_mut().find(|t| t.id == *id))
+            })
+            .or_else(|| self.tabs.first_mut());
+
+        if let Some(tab) = tab {
             let snapshot = tab.render_snapshot();
             let display_offset = snapshot.display_offset as i32;
             let rows = snapshot.rows as i32;
@@ -213,11 +235,20 @@ impl Ashell {
         }
 
         // Get current display_offset to convert grid line → viewport row.
-        let Some(tab) = self
+        let tab = self
             .active_tab
             .as_ref()
             .and_then(|id| self.tabs.iter().find(|t| &t.id == id))
-        else {
+            .or_else(|| {
+                self.active_group
+                    .as_ref()
+                    .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
+                    .and_then(|g| g.pane_root.tab_ids().first())
+                    .and_then(|id| self.tabs.iter().find(|t| t.id == *id))
+            })
+            .or_else(|| self.tabs.first());
+
+        let Some(tab) = tab else {
             return None;
         };
         let snapshot = tab.render_snapshot();
