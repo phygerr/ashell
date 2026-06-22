@@ -13,27 +13,6 @@ use rust_i18n::t;
 
 use crate::Ashell;
 
-// ── Search highlight colors ──────────────────────────────────────────────
-// Regular matches: semi-transparent red.
-fn search_match_color() -> Hsla {
-    Hsla {
-        h: 0.0,
-        s: 0.85,
-        l: 0.50,
-        a: 0.45,
-    }
-}
-
-// Current match: fully opaque bright red.
-fn search_current_color() -> Hsla {
-    Hsla {
-        h: 0.0,
-        s: 0.90,
-        l: 0.50,
-        a: 0.70,
-    }
-}
-
 impl Ashell {
     pub(crate) fn toggle_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.search_active {
@@ -223,7 +202,11 @@ impl Ashell {
 
     /// Build a highlight map for search matches, converting grid line indices
     /// to the current viewport coordinates.
-    pub(crate) fn search_highlight_map(&self) -> Option<HashMap<(i32, i32), Hsla>> {
+    pub(crate) fn search_highlight_map(
+        &self,
+        match_color: Hsla,
+        current_color: Hsla,
+    ) -> Option<HashMap<(i32, i32), Hsla>> {
         if self.search_matches.is_empty() || self.search_query.is_empty() {
             return None;
         }
@@ -241,8 +224,6 @@ impl Ashell {
         let rows = snapshot.rows as i32;
 
         let mut map = HashMap::new();
-        let match_color = search_match_color();
-        let current_color = search_current_color();
 
         let mut sorted: Vec<(i32, i32)> = self.search_matches.clone();
         sorted.sort();
@@ -286,31 +267,32 @@ impl Ashell {
         Some(map)
     }
 
+    /// Render the search button (used in the tab bar).
+    pub(crate) fn render_search_button(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> impl gpui::IntoElement {
+        // Wrap in a div so .hover() doesn't conflict with Button's internal hover.
+        div()
+            .child(
+                Button::new("search-btn")
+                    .ghost()
+                    .small()
+                    .rounded(px(999.))
+                    .icon(IconName::Search)
+                    .tooltip(t!("search").to_string())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.toggle_search(window, cx);
+                    })),
+            )
+    }
+
+    /// Render the expanded search bar overlay (when search is active).
     pub(crate) fn render_search_bar(
         &mut self,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl gpui::IntoElement {
-        if !self.search_active {
-            // Semi-transparent search button in the top-right corner.
-            return div()
-                .absolute()
-                .top(px(8.))
-                .right(px(24.))
-                .child(
-                    Button::new("search-btn")
-                        .ghost()
-                        .icon(IconName::Search)
-                        .opacity(0.35)
-                        .hover(|s| s.opacity(1.0))
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.toggle_search(window, cx);
-                        })),
-                )
-                .into_any_element();
-        }
-
-        // Expanded search bar.
         let match_count = count_match_groups(&self.search_matches);
         let has_query = !self.search_query.is_empty();
         let has_matches = match_count > 0;
@@ -326,9 +308,6 @@ impl Ashell {
             .absolute()
             .top(px(8.))
             .right(px(24.))
-            // Ensure the search input gets focus when the user clicks on the
-            // search bar area (the input itself may not receive the click
-            // because the bar div intercepts it).
             .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
                 this.refocus_search_input(window, cx);
             }))
@@ -341,9 +320,6 @@ impl Ashell {
                     .bg(cx.theme().popover)
                     .border_1()
                     .border_color(cx.theme().border)
-                    // Escape is handled on the input wrapper so it fires
-                    // AFTER the input processes the keystroke (the parent
-                    // div's on_key_down fires BEFORE and would block Ctrl+V).
                     .child(
                         div()
                             .w(px(200.))

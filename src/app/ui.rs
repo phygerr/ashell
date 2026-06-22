@@ -2102,7 +2102,8 @@ impl Ashell {
                                 cx.stop_propagation();
                                 this.split_current_pane("right", cx);
                             })),
-                    ),
+                    )
+                    .child(self.render_search_button(cx)),
             )
     }
 
@@ -2142,9 +2143,10 @@ impl Ashell {
                         self.render_home_page(cx).into_any_element()
                     }),
             )
-            // Search bar overlay — rendered as a sibling outside the terminal panel
-            // so its Input can receive key events independently.
-            .child(self.render_search_bar(window, cx))
+            // Search bar overlay — only when search is active.
+            .when(self.search_active, |el| {
+                el.child(self.render_search_bar(window, cx))
+            })
     }
 
     fn render_pane_tree(
@@ -2204,7 +2206,10 @@ impl Ashell {
                         font_size,
                         line_height,
                         cell_width,
-                        this.search_highlight_map(),
+                        this.search_highlight_map(
+                            cx.theme().danger.opacity(0.35),
+                            cx.theme().danger.opacity(0.70),
+                        ),
                     ));
                 let scrollbar = this.terminal_scrollbars.entry(tab_id.clone()).or_default();
                 el = el.vertical_scrollbar(scrollbar);
