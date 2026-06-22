@@ -1063,8 +1063,9 @@ impl Ashell {
                 let id_owned = id.to_string();
                 let changed = self.active_tab.as_deref() != Some(id_owned.as_str());
                 self.active_tab = Some(id_owned);
-                // Clear stale search results when switching to a different pane.
+                // Clear stale search state when switching to a different pane.
                 if changed && self.search_active {
+                    self.search_query.clear();
                     self.search_matches.clear();
                     self.search_current = 0;
                 }
@@ -1353,9 +1354,10 @@ impl Ashell {
             let changed = self.active_tab.as_deref() != Some(tab_id.as_str());
             self.focused_pane_path = path;
             self.active_tab = Some(tab_id);
-            // Clear stale search results when switching to a different pane.
+            // Clear stale search state when switching to a different pane.
             // The user can press Enter to re-search in the new pane.
             if changed && self.search_active {
+                self.search_query.clear();
                 self.search_matches.clear();
                 self.search_current = 0;
             }

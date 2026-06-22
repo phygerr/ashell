@@ -2178,7 +2178,7 @@ impl Ashell {
                         });
                     })
                     .overflow_hidden()
-                    .when(!self.search_active, |el| el.track_focus(&self.focus_handle))
+                    .track_focus(&self.focus_handle)
                     .key_context(TERMINAL_KEY_CONTEXT)
                     .on_mouse_down(MouseButton::Left, cx.listener(Self::focus_terminal))
                     .on_mouse_down(
