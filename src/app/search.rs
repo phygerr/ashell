@@ -74,15 +74,21 @@ impl Ashell {
         let tab = self
             .active_tab
             .as_ref()
-            .and_then(|id| self.tabs.iter().find(|t| &t.id == id))
-            .or_else(|| {
-                self.active_group
-                    .as_ref()
-                    .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
-                    .and_then(|g| g.pane_root.tab_ids().first())
-                    .and_then(|id| self.tabs.iter().find(|t| t.id == *id))
-            })
-            .or_else(|| self.tabs.first());
+            .and_then(|id| self.tabs.iter().find(|t| &t.id == id));
+
+        let tab = tab.or_else(|| {
+            let first_id = self
+                .active_group
+                .as_ref()
+                .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
+                .and_then(|g| g.pane_root.tab_ids().into_iter().next())
+                .map(|s| s.to_string());
+            first_id
+                .as_deref()
+                .and_then(|id| self.tabs.iter().find(|t| t.id == id))
+        });
+
+        let tab = tab.or_else(|| self.tabs.first());
 
         let Some(tab) = tab else {
             self.status = t!("no_results").into();
@@ -188,17 +194,21 @@ impl Ashell {
             return;
         };
 
-        let tab = self
+        // Find the tab ID first (immutable borrow), then look up mutably.
+        let tab_id = self
             .active_tab
-            .as_ref()
-            .and_then(|id| self.tabs.iter_mut().find(|t| &t.id == id))
+            .clone()
             .or_else(|| {
                 self.active_group
                     .as_ref()
                     .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
-                    .and_then(|g| g.pane_root.tab_ids().first())
-                    .and_then(|id| self.tabs.iter_mut().find(|t| t.id == *id))
-            })
+                    .and_then(|g| g.pane_root.tab_ids().into_iter().next())
+                    .map(|s| s.to_string())
+            });
+
+        let tab = tab_id
+            .as_deref()
+            .and_then(|id| self.tabs.iter_mut().find(|t| t.id == id))
             .or_else(|| self.tabs.first_mut());
 
         if let Some(tab) = tab {
@@ -238,15 +248,21 @@ impl Ashell {
         let tab = self
             .active_tab
             .as_ref()
-            .and_then(|id| self.tabs.iter().find(|t| &t.id == id))
-            .or_else(|| {
-                self.active_group
-                    .as_ref()
-                    .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
-                    .and_then(|g| g.pane_root.tab_ids().first())
-                    .and_then(|id| self.tabs.iter().find(|t| t.id == *id))
-            })
-            .or_else(|| self.tabs.first());
+            .and_then(|id| self.tabs.iter().find(|t| &t.id == id));
+
+        let tab = tab.or_else(|| {
+            let first_id = self
+                .active_group
+                .as_ref()
+                .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
+                .and_then(|g| g.pane_root.tab_ids().into_iter().next())
+                .map(|s| s.to_string());
+            first_id
+                .as_deref()
+                .and_then(|id| self.tabs.iter().find(|t| t.id == id))
+        });
+
+        let tab = tab.or_else(|| self.tabs.first());
 
         let Some(tab) = tab else {
             return None;
