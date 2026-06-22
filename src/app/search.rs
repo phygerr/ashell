@@ -195,21 +195,19 @@ impl Ashell {
         };
 
         // Find the tab ID first (immutable borrow), then look up mutably.
-        let tab_id = self
-            .active_tab
-            .clone()
-            .or_else(|| {
-                self.active_group
-                    .as_ref()
-                    .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
-                    .and_then(|g| g.pane_root.tab_ids().into_iter().next())
-                    .map(|s| s.to_string())
-            });
+        let tab_id = self.active_tab.clone().or_else(|| {
+            self.active_group
+                .as_ref()
+                .and_then(|gid| self.tab_groups.iter().find(|g| &g.id == gid))
+                .and_then(|g| g.pane_root.tab_ids().into_iter().next())
+                .map(|s| s.to_string())
+        });
 
-        let tab = tab_id
-            .as_deref()
-            .and_then(|id| self.tabs.iter_mut().find(|t| t.id == id))
-            .or_else(|| self.tabs.first_mut());
+        let tab = if let Some(id) = tab_id.as_deref() {
+            self.tabs.iter_mut().find(|t| t.id == id)
+        } else {
+            self.tabs.first_mut()
+        };
 
         if let Some(tab) = tab {
             let snapshot = tab.render_snapshot();
