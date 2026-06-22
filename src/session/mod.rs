@@ -804,6 +804,15 @@ impl Ashell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // If the search bar is visible and the click is inside it, let the
+        // search bar handle the event instead of switching pane focus.
+        if self.search_active {
+            if let Some(bounds) = self.search_bar_bounds {
+                if bounds.contains(&event.position) {
+                    return;
+                }
+            }
+        }
         self.focus_handle.focus(window, cx);
         // Check if click is in a different pane and focus it
         let click_pos = event.position;

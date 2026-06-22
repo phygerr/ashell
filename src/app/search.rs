@@ -41,6 +41,7 @@ impl Ashell {
         self.search_query.clear();
         self.search_matches.clear();
         self.search_current = 0;
+        self.search_bar_bounds = None;
         self.focus_handle.focus(window, cx);
         cx.notify();
     }
@@ -304,10 +305,16 @@ impl Ashell {
             String::new()
         };
 
+        let view = cx.entity();
         div()
             .absolute()
             .top(px(8.))
             .right(px(24.))
+            .on_prepaint(move |bounds, _window, cx| {
+                let _ = view.update(cx, |this, _| {
+                    this.search_bar_bounds = Some(bounds);
+                });
+            })
             .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
                 this.refocus_search_input(window, cx);
             }))
