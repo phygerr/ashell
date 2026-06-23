@@ -340,6 +340,7 @@ pub fn paint_custom_block(
     painted
 }
 
+<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Terminal keyword / pattern highlighting
 // ---------------------------------------------------------------------------
@@ -726,3 +727,6 @@ fn find_port_len(text: &str) -> usize {
     }
     len
 }
+=======
+
+>>>>>>> 6d23d27feacde97a1d597b6c33d25f3b4b529c2f

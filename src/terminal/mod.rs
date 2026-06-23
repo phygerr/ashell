@@ -1,6 +1,7 @@
 pub mod custom_blocks;
 pub mod element;
 pub mod input;
+pub mod highlight;
 
 use std::sync::mpsc::Sender;
 
@@ -152,6 +153,7 @@ pub struct TerminalTab {
     pub rows: u16,
     pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     pub scroll_pixel_y: f32,
+    pub(crate) highlight_cache: std::cell::RefCell<Option<(Vec<RenderCell>, std::collections::HashMap<(i32, i32), gpui::Hsla>)>>,
 }
 
 #[derive(Clone, Copy)]
@@ -161,7 +163,7 @@ pub struct CursorState {
     pub shape: CursorShape,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct RenderCell {
     pub row: i32,
     pub col: i32,
@@ -177,6 +179,7 @@ pub struct RenderSnapshot {
     pub history_size: usize,
     pub rows: usize,
     pub cols: usize,
+    pub highlights: std::collections::HashMap<(i32, i32), gpui::Hsla>,
 }
 
 #[derive(Clone, Copy)]
@@ -263,6 +266,7 @@ impl TerminalTab {
             rows: 30,
             backend: shared_backend,
             scroll_pixel_y: 0.0,
+            highlight_cache: std::cell::RefCell::new(None),
         }
     }
 
@@ -356,14 +360,41 @@ impl TerminalTab {
             });
         }
 
+        // Get highlights from cache or recompute, only if keyword_highlight is enabled.
+        let is_enabled = crate::session::config::ConfigStore::load()
+            .map(|c| c.keyword_highlight())
+            .unwrap_or(false);
+
+        let highlights = if is_enabled {
+            let mut cache = self.highlight_cache.borrow_mut();
+            let cache_valid = cache.as_ref().map_or(false, |(cached_cells, _)| {
+                cached_cells == &cells
+            });
+            if cache_valid {
+                cache.as_ref().unwrap().1.clone()
+            } else {
+                let computed = self::highlight::highlight_cells(&cells, rows as usize);
+                *cache = Some((cells.clone(), computed.clone()));
+                computed
+            }
+        } else {
+            std::collections::HashMap::new()
+        };
+
         RenderSnapshot {
             cells,
             cursor: self.cursor_state(),
-            selection: viewport_selection_from_range(content.display_offset, &content.selection),
+            selection: viewport_selection_from_range(
+                content.display_offset,
+                self.rows as usize,
+                self.cols as usize,
+                &content.selection,
+            ),
             display_offset: content.display_offset,
             history_size: self.term.grid().history_size(),
             rows: self.rows as usize,
             cols: self.cols as usize,
+            highlights,
         }
     }
 
@@ -470,6 +501,8 @@ impl TerminalTab {
 
 fn viewport_selection_from_range(
     display_offset: usize,
+    rows: usize,
+    cols: usize,
     selection: &Option<SelectionRange>,
 ) -> Option<ViewportSelection> {
     let SelectionRange {
@@ -477,14 +510,34 @@ fn viewport_selection_from_range(
         end,
         is_block,
     } = selection.as_ref().copied()?;
-    let start = point_to_viewport(display_offset, start)?;
-    let end = point_to_viewport(display_offset, end)?;
+
+    let top_point = viewport_to_point(display_offset, Point::new(0, Column(0)));
+    let bottom_point = viewport_to_point(display_offset, Point::new(rows.saturating_sub(1), Column(0)));
+
+    let top_line = top_point.line;
+    let bottom_line = bottom_point.line;
+
+    let start_vp = if start.line < top_line {
+        Point::new(0, Column(0))
+    } else if start.line > bottom_line {
+        Point::new(rows.saturating_sub(1), Column(cols.saturating_sub(1)))
+    } else {
+        point_to_viewport(display_offset, start).unwrap_or(Point::new(0, Column(0)))
+    };
+
+    let end_vp = if end.line < top_line {
+        Point::new(0, Column(0))
+    } else if end.line > bottom_line {
+        Point::new(rows.saturating_sub(1), Column(cols.saturating_sub(1)))
+    } else {
+        point_to_viewport(display_offset, end).unwrap_or(Point::new(rows.saturating_sub(1), Column(cols.saturating_sub(1))))
+    };
 
     Some(ViewportSelection {
-        start_row: start.line,
-        start_col: start.column.0,
-        end_row: end.line,
-        end_col: end.column.0,
+        start_row: start_vp.line,
+        start_col: start_vp.column.0,
+        end_row: end_vp.line,
+        end_col: end_vp.column.0,
         is_block,
     })
 }

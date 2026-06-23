@@ -1546,6 +1546,25 @@ impl Ashell {
                                                 )
                                                 .item(
                                                     SettingItem::new(
+                                                        t!("keyword_highlight").to_string(),
+                                                        SettingField::render({
+                                                            let view = view_clone_for_general.clone();
+                                                            move |_, window, cx| {
+                                                                Switch::new("keyword-highlight")
+                                                                    .small()
+                                                                    .checked(view.read(cx).config.keyword_highlight())
+                                                                    .on_click(window.listener_for(&view, |this, checked, _, cx| {
+                                                                        this.config.set_keyword_highlight(*checked);
+                                                                        let _ = this.config.save();
+                                                                        cx.notify();
+                                                                    }))
+                                                                    .into_any_element()
+                                                            }
+                                                        })
+                                                    )
+                                                )
+                                                .item(
+                                                    SettingItem::new(
                                                         t!("monitoring_position").to_string(),
                                                         SettingField::render({
                                                             let view = view_clone_for_general.clone();

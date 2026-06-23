@@ -12,6 +12,10 @@ use crate::{
     terminal::{BackendCommand, encode_key},
 };
 
+thread_local! {
+    static LAST_DRAG_SCROLL: std::cell::Cell<Option<std::time::Instant>> = std::cell::Cell::new(None);
+}
+
 impl Ashell {
     pub(crate) fn on_terminal_key_down(
         &mut self,
@@ -370,7 +374,54 @@ impl Ashell {
         let Some(active_id) = self.active_tab.clone() else {
             return;
         };
+        let snapshot = match self.active_snapshot() {
+            Some(s) => s,
+            None => return,
+        };
+        let max_row = snapshot.rows.saturating_sub(1);
+
+        let mut scroll_delta = 0i32;
+        if max_row >= 6 {
+            if row <= 2 || row >= max_row.saturating_sub(2) {
+                let now = std::time::Instant::now();
+                let should_scroll = LAST_DRAG_SCROLL.with(|last| {
+                    if let Some(last_time) = last.get() {
+                        if now.duration_since(last_time) >= std::time::Duration::from_millis(80) {
+                            last.set(Some(now));
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        last.set(Some(now));
+                        true
+                    }
+                });
+
+                if should_scroll {
+                    if row == 0 {
+                        scroll_delta = 2;
+                    } else if row == 1 {
+                        scroll_delta = 1;
+                    } else if row == 2 {
+                        scroll_delta = 1;
+                    } else if row == max_row {
+                        scroll_delta = -2;
+                    } else if row == max_row.saturating_sub(1) {
+                        scroll_delta = -1;
+                    } else if row == max_row.saturating_sub(2) {
+                        scroll_delta = -1;
+                    }
+                }
+            } else {
+                LAST_DRAG_SCROLL.with(|last| last.set(None));
+            }
+        }
+
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) {
+            if scroll_delta != 0 {
+                tab.scroll_history(scroll_delta);
+            }
             tab.update_selection(row, col, side);
             cx.notify();
         }

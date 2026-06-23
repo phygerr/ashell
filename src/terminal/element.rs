@@ -357,9 +357,17 @@ impl TerminalElement {
         let mut custom_blocks = Vec::new();
         let mut current_run: Option<BatchedTextRun> = None;
 
+<<<<<<< HEAD
         // Compute keyword / pattern highlight map once per frame.
         let highlights =
             highlight_cells(&self.snapshot.cells, self.snapshot.rows, self.search_highlights.as_ref());
+=======
+        // Retrieve cached keyword highlights and merge with search highlights
+        let mut highlights = self.snapshot.highlights.clone();
+        if let Some(sm) = self.search_highlights.as_ref() {
+            highlights.extend(sm.iter().map(|(k, v)| (*k, *v)));
+        }
+>>>>>>> 6d23d27feacde97a1d597b6c33d25f3b4b529c2f
 
         for render_cell in &self.snapshot.cells {
             let cell = &render_cell.cell;

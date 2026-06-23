@@ -113,6 +113,7 @@ zombie_reason: "This transfer was interrupted because the application exited. Th
 software_builtin: "Built-in"
 retry: "Retry"
 right_click_copy_paste: "Right-click Copy/Paste"
+keyword_highlight: "Terminal Keyword Highlighting"
 copy_paste_hint: "Regardless of this switch, you can always use %{key} + C/V to copy/paste."
 edit_file: "Edit File"
 edit_file_tooltip: "Download to temporary directory, open in default editor, and auto upload on save."

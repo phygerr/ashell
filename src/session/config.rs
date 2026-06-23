@@ -146,6 +146,8 @@ pub struct ConfigFile {
     pub ui_font_size: f32,
     #[serde(default)]
     pub right_click_copy_paste: bool,
+    #[serde(default)]
+    pub keyword_highlight: bool,
     #[serde(default = "default_ui_font_family")]
     pub ui_font_family: String,
     #[serde(default = "default_terminal_font_family")]
@@ -532,6 +534,14 @@ impl ConfigStore {
 
     pub fn set_right_click_copy_paste(&mut self, val: bool) {
         self.cache.right_click_copy_paste = val;
+    }
+
+    pub fn keyword_highlight(&self) -> bool {
+        self.cache.keyword_highlight
+    }
+
+    pub fn set_keyword_highlight(&mut self, val: bool) {
+        self.cache.keyword_highlight = val;
     }
 
     pub fn terminal_font_family(&self) -> &str {
