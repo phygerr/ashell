@@ -2266,18 +2266,15 @@ impl Ashell {
                             cx.theme().danger.opacity(0.70),
                         ),
                     ));
-                // Inline disconnect overlay: show message in terminal pane when session is lost
-                let disconnected_info = this
+                // Inline disconnect overlay: show message in terminal pane when session is lost.
+                // pointer_events_none() lets mouse events pass through to the terminal
+                // so the user can still select and copy text from the history.
+                let disconnected_reason = this
                     .tabs
                     .iter()
                     .find(|t| t.id == *tab_id)
-                    .and_then(|tab| {
-                        tab.disconnected_reason
-                            .as_ref()
-                            .map(|reason| (reason.clone(), tab.session.is_some()))
-                    });
-                if let Some((reason, has_session)) = disconnected_info {
-                    let tab_id_for_reconnect = tab_id.clone();
+                    .and_then(|tab| tab.disconnected_reason.clone());
+                if let Some(reason) = disconnected_reason {
                     el = div()
                         .size_full()
                         .relative()
@@ -2298,6 +2295,7 @@ impl Ashell {
                                 .flex()
                                 .items_center()
                                 .justify_center()
+                                .pointer_events_none()
                                 .child(
                                     v_flex()
                                         .items_center()
@@ -2308,22 +2306,12 @@ impl Ashell {
                                                 .text_color(cx.theme().danger)
                                                 .child(t!("session_disconnected", "reason" = reason).to_string()),
                                         )
-                                        .when(has_session, |this| {
-                                            this.child(
-                                                div()
-                                                    .text_size(rems(0.95))
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(t!("press_enter_to_reconnect").to_string()),
-                                            )
-                                        }),
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.retry_disconnected_tab(&tab_id_for_reconnect, cx);
-                                        window.prevent_default();
-                                        cx.stop_propagation();
-                                    }),
+                                        .child(
+                                            div()
+                                                .text_size(rems(0.95))
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(t!("press_enter_to_reconnect").to_string()),
+                                        ),
                                 ),
                         );
                 }

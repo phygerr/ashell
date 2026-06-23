@@ -157,7 +157,7 @@ impl Ashell {
         tab.clear_selection();
 
         if let Some(bytes) = encode_key(&event.keystroke, tab.app_cursor_mode(), false) {
-            tab.backend.send(BackendCommand::Input(bytes));
+            tab.send_backend(BackendCommand::Input(bytes));
             window.prevent_default();
             cx.stop_propagation();
             cx.notify();
@@ -195,7 +195,7 @@ impl Ashell {
         }
 
         tab.clear_selection();
-        tab.backend.send(BackendCommand::Input(bytes));
+        tab.send_backend(BackendCommand::Input(bytes));
         window.prevent_default();
         cx.stop_propagation();
         cx.notify();
@@ -277,8 +277,7 @@ impl Ashell {
         }
         tab.clear_selection();
         self.terminal_marked_text = None;
-        tab.backend
-            .send(BackendCommand::Input(text.as_bytes().to_vec()));
+        tab.send_backend(BackendCommand::Input(text.as_bytes().to_vec()));
         window.invalidate_character_coordinates();
         cx.notify();
     }
@@ -489,8 +488,7 @@ impl Ashell {
                         }
                     }
                     if !bytes.is_empty() {
-                        tab.backend
-                            .send(crate::terminal::BackendCommand::Input(bytes));
+                        tab.send_backend(crate::terminal::BackendCommand::Input(bytes));
                     }
                 }
                 window.prevent_default();
@@ -504,8 +502,7 @@ impl Ashell {
                     bytes.extend_from_slice(&[b'\x1b', b'O', code]);
                 }
                 if !bytes.is_empty() {
-                    tab.backend
-                        .send(crate::terminal::BackendCommand::Input(bytes));
+                    tab.send_backend(crate::terminal::BackendCommand::Input(bytes));
                 }
                 window.prevent_default();
                 cx.stop_propagation();

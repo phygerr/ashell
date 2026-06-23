@@ -491,69 +491,115 @@ impl Ashell {
         cx.notify();
     }
 
-    /// Retry a single disconnected SSH tab by its ID.
+    /// Retry a single disconnected tab by its ID.
+    /// For SSH tabs: spawns a new SSH connection and restarts SFTP.
+    /// For local tabs: spawns a new local shell.
+    ///
+    /// The existing `TerminalTab` (including its `term` scrollback history)
+    /// is preserved — only the backend is swapped via `set_backend()`.
     pub(crate) fn retry_disconnected_tab(&mut self, tab_id: &str, cx: &mut Context<Self>) {
         let Some(ix) = self.tabs.iter().position(|t| t.id == tab_id) else {
-            return;
-        };
-        let Some(session) = self.tabs[ix].session.clone() else {
             return;
         };
         if self.tabs[ix].connected || self.tabs[ix].disconnected_reason.is_none() {
             return;
         }
 
-        // Close old backend
-        self.tabs[ix].backend.send(BackendCommand::Close);
+        let is_ssh = self.tabs[ix].session.is_some();
+        let session = self.tabs[ix].session.clone();
+        let new_generation = self.tabs[ix].backend_generation + 1;
+        let cols = self.tabs[ix].cols;
+        let rows = self.tabs[ix].rows;
 
-        // Spawn new backend
-        let backend = ssh::spawn_ssh_terminal(
-            self.runtime.handle(),
-            tab_id.to_string(),
-            session.clone(),
-            DEFAULT_COLS,
-            DEFAULT_ROWS,
-            self.events_tx.clone(),
-        );
+        // Close old backend (sends Close through the shared Arc<Mutex>)
+        self.tabs[ix].send_backend(BackendCommand::Close);
 
-        // Replace tab state in-place to reuse the UI component
-        self.tabs[ix] =
-            TerminalTab::new_ssh(tab_id.to_string(), &session, backend, self.events_tx.clone());
+        if let Some(session) = session {
+            // SSH tab: spawn new SSH connection
+            let backend = ssh::spawn_ssh_terminal(
+                self.runtime.handle(),
+                tab_id.to_string(),
+                session.clone(),
+                cols,
+                rows,
+                self.events_tx.clone(),
+            );
 
-        // Restart SFTP for the group containing this tab
-        if let Some(group) = self
-            .tab_groups
-            .iter()
-            .find(|g| g.pane_root.contains(tab_id))
-        {
-            let group_id = group.id.clone();
-            let group_session = self
-                .tabs
+            // Swap the backend — the Term's internal listener shares the
+            // same Arc<Mutex<BackendTx>>, so user input is automatically
+            // routed to the new backend. Terminal history is preserved.
+            self.tabs[ix].set_backend(backend);
+            self.tabs[ix].connected = false;
+            self.tabs[ix].status = "connecting".into();
+            self.tabs[ix].disconnected_reason = None;
+            self.tabs[ix].backend_generation = new_generation;
+            self.tabs[ix].backend_initialized = false;
+
+            // Restart SFTP for the group containing this tab
+            if let Some(group) = self
+                .tab_groups
                 .iter()
-                .find(|t| group.pane_root.contains(&t.id) && t.session.is_some())
-                .and_then(|t| t.session.clone());
+                .find(|g| g.pane_root.contains(tab_id))
+            {
+                let group_id = group.id.clone();
+                let group_session = self
+                    .tabs
+                    .iter()
+                    .find(|t| group.pane_root.contains(&t.id) && t.session.is_some())
+                    .and_then(|t| t.session.clone());
 
-            if let Some(session) = group_session {
-                if let Some(old_handle) = self.sftp_handles.remove(&group_id) {
-                    old_handle.close();
-                }
-                let sftp_handle = crate::sftp::spawn_sftp(
-                    self.runtime.handle(),
-                    group_id.clone(),
-                    session,
-                    self.events_tx.clone(),
-                );
-                self.sftp_handles.insert(group_id.clone(), sftp_handle);
-
-                if let Some(group) = self.tab_groups.iter_mut().find(|g| g.id == group_id) {
-                    if let Some(sftp) = group.sftp.as_mut() {
-                        sftp.status = rust_i18n::t!("sftp_connecting").to_string();
+                if let Some(session) = group_session {
+                    if let Some(old_handle) = self.sftp_handles.remove(&group_id) {
+                        old_handle.close();
                     }
+                    let sftp_handle = crate::sftp::spawn_sftp(
+                        self.runtime.handle(),
+                        group_id.clone(),
+                        session,
+                        self.events_tx.clone(),
+                    );
+                    self.sftp_handles.insert(group_id.clone(), sftp_handle);
+
+                    if let Some(group) = self.tab_groups.iter_mut().find(|g| g.id == group_id) {
+                        if let Some(sftp) = group.sftp.as_mut() {
+                            sftp.status = rust_i18n::t!("sftp_connecting").to_string();
+                        }
+                    }
+                }
+            }
+        } else {
+            // Local tab: spawn new local shell
+            match local::spawn_local_terminal(
+                tab_id.to_string(),
+                cols,
+                rows,
+                self.events_tx.clone(),
+            ) {
+                Ok(backend) => {
+                    // Swap the backend — preserves terminal history.
+                    self.tabs[ix].set_backend(backend);
+                    self.tabs[ix].connected = true;
+                    self.tabs[ix].status = "local shell".into();
+                    self.tabs[ix].disconnected_reason = None;
+                    self.tabs[ix].backend_generation = new_generation;
+                    self.tabs[ix].backend_initialized = false;
+                    // Resize the new PTY to match the pane dimensions.
+                    self.tabs[ix].send_backend(BackendCommand::Resize { cols, rows });
+                }
+                Err(err) => {
+                    self.status = format!("failed to reopen local terminal: {err:#}").into();
+                    cx.notify();
+                    return;
                 }
             }
         }
 
-        self.status = "ssh tab retrying".into();
+        self.status = if is_ssh {
+            "ssh tab retrying"
+        } else {
+            "local tab reopened"
+        }
+        .into();
         cx.notify();
     }
 
@@ -617,7 +663,7 @@ impl Ashell {
                 id
             );
             if let Some(ix) = self.tabs.iter().position(|tab| tab.id == id) {
-                self.tabs[ix].backend.send(BackendCommand::Close);
+                self.tabs[ix].send_backend(BackendCommand::Close);
                 self.tabs.remove(ix);
             }
             return;
@@ -676,7 +722,7 @@ impl Ashell {
                 .collect();
             for tab_id in &tab_ids {
                 if let Some(ix) = self.tabs.iter().position(|tab| tab.id == *tab_id) {
-                    self.tabs[ix].backend.send(BackendCommand::Close);
+                    self.tabs[ix].send_backend(BackendCommand::Close);
                     self.tabs.retain(|t| t.id != *tab_id);
                 }
             }
@@ -688,7 +734,7 @@ impl Ashell {
         } else {
             // Just remove this tab from the group
             if let Some(ix) = self.tabs.iter().position(|tab| tab.id == id) {
-                self.tabs[ix].backend.send(BackendCommand::Close);
+                self.tabs[ix].send_backend(BackendCommand::Close);
                 self.tabs.retain(|t| t.id != id);
             }
             if let Some(g) = self

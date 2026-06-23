@@ -718,17 +718,20 @@ impl Ashell {
             match event {
                 BackendEvent::Output { tab_id, bytes } => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                        tab.backend_initialized = true;
                         tab.feed(&bytes);
                     }
                 }
                 BackendEvent::Status { tab_id, text } => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                        tab.backend_initialized = true;
                         tab.status = text.clone();
                     }
                     self.status = text.into();
                 }
                 BackendEvent::Connected { tab_id } => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                        tab.backend_initialized = true;
                         tab.connected = true;
                         tab.disconnected_reason = None;
                     }
@@ -809,26 +812,28 @@ impl Ashell {
                 }
                 BackendEvent::Closed { tab_id, reason } => {
                     self.remote_sample_in_flight = false;
-                    let is_graceful_exit =
-                        reason == "local shell closed" || reason == "ssh session closed";
+                    let is_stale = self
+                        .tabs
+                        .iter()
+                        .find(|t| t.id == tab_id)
+                        .is_some_and(|tab| {
+                            // After retry_disconnected_tab, the old backend's threads
+                            // may still send Closed events. Skip those — they arrive
+                            // before the new backend sends its first Output/Connected.
+                            // Once backend_initialized is set, any Closed is from the
+                            // current backend and should be processed.
+                            tab.backend_generation > 0 && !tab.backend_initialized
+                        });
+                    if is_stale {
+                        continue;
+                    }
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
                         tab.connected = false;
                         tab.status = reason.clone();
-                        // For non-graceful exits, mark as disconnected
-                        // so the terminal pane shows an inline reconnection prompt
-                        if !is_graceful_exit {
-                            tab.disconnected_reason = Some(reason.clone());
-                        }
+                        tab.disconnected_reason = Some(reason.clone());
                     }
                     if self.system_tab_id.as_deref() == Some(tab_id.as_str()) {
                         self.system_status = Some(reason.clone().into());
-                    }
-                    // Auto-close the pane on graceful exit (e.g. user typed exit)
-                    if is_graceful_exit {
-                        self.handle_tab_close(tab_id.clone());
-                        self.status = reason.into();
-                        self.remote_sample_in_flight = false;
-                        return changed;
                     }
                     self.status = reason.into();
                 }
@@ -972,7 +977,9 @@ impl Ashell {
             return;
         }
         self.remote_sample_in_flight = true;
-        backend.send(crate::terminal::BackendCommand::SampleMetrics);
+        if let Ok(backend) = backend.lock() {
+            backend.send(crate::terminal::BackendCommand::SampleMetrics);
+        }
     }
 
     pub(crate) fn terminal_ime_bounds_for_range(
