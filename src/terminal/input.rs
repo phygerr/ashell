@@ -108,6 +108,29 @@ impl Ashell {
             }
         }
 
+        // If the active tab is disconnected and user presses Enter, reconnect
+        if event.keystroke.key == "enter"
+            && !event.keystroke.modifiers.shift
+            && !event.keystroke.modifiers.control
+            && !event.keystroke.modifiers.alt
+            && !event.keystroke.modifiers.platform
+        {
+            let active_id = self.active_tab.clone();
+            if let Some(active_id) = active_id {
+                let is_disconnected = self
+                    .tabs
+                    .iter()
+                    .find(|t| t.id == active_id)
+                    .is_some_and(|tab| tab.disconnected_reason.is_some());
+                if is_disconnected {
+                    self.retry_disconnected_tab(&active_id, cx);
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+        }
+
         if event.prefer_character_input {
             if let Some(text) = event.keystroke.key_char.as_deref() {
                 if !text.is_empty()
