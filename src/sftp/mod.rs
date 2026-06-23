@@ -868,6 +868,34 @@ async fn connect_and_authenticate(
             }
             success
         }
+        AuthMethod::KeyboardInteractive => {
+            let cached_kb_responses = {
+                let cache_lock = crate::backend::ssh::CREDENTIALS_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+                let cache = cache_lock.lock().unwrap();
+                cache.get(&session.id).and_then(|c| c.kb_responses.clone())
+            };
+            let responses = cached_kb_responses.unwrap_or_else(|| vec![session.password.clone()]);
+            let mut response = handle.authenticate_keyboard_interactive_start(&session.user, None).await?;
+            loop {
+                match response {
+                    russh::client::KeyboardInteractiveAuthResponse::Success => {
+                        break true;
+                    }
+                    russh::client::KeyboardInteractiveAuthResponse::Failure => {
+                        break false;
+                    }
+                    russh::client::KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
+                        let mut resp = responses.clone();
+                        if resp.len() < prompts.len() {
+                            resp.resize(prompts.len(), String::new());
+                        } else if resp.len() > prompts.len() {
+                            resp.truncate(prompts.len());
+                        }
+                        response = handle.authenticate_keyboard_interactive_respond(resp).await?;
+                    }
+                }
+            }
+        }
     };
 
     if !authed {
@@ -879,6 +907,7 @@ async fn connect_and_authenticate(
             match session.auth {
                 AuthMethod::Password => "password",
                 AuthMethod::Key => "public key",
+                AuthMethod::KeyboardInteractive => "keyboard interactive",
             },
             session.user,
             session.host,
@@ -892,8 +921,17 @@ async fn connect_and_authenticate(
 fn load_session_private_key(session: &Session) -> Result<PrivateKey> {
     let inline_key = normalize_inline_private_key(&session.private_key_inline);
     let key_path = expand_key_path(session.private_key_path.trim());
-    let passphrase = session.passphrase.trim();
-    let passphrase = (!passphrase.is_empty()).then_some(passphrase);
+    let cached_passphrase = {
+        let cache_lock = crate::backend::ssh::CREDENTIALS_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+        let cache = cache_lock.lock().unwrap();
+        cache.get(&session.id).and_then(|c| c.passphrase.clone())
+    };
+    let passphrase = if let Some(ref p) = cached_passphrase {
+        Some(p.as_str())
+    } else {
+        let p = session.passphrase.trim();
+        (!p.is_empty()).then_some(p)
+    };
     let has_inline = !inline_key.is_empty();
     let has_path = key_path.is_some();
 

@@ -24,16 +24,35 @@ pub enum TabKind {
     Ssh,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptType {
+    KeyboardInteractive,
+    Passphrase,
+}
+
+#[derive(Debug, Clone)]
+pub struct PromptInfo {
+    pub prompt: String,
+    pub echo: bool,
+}
+
 #[derive(Debug)]
 pub enum BackendCommand {
     Input(Vec<u8>),
     Resize { cols: u16, rows: u16 },
     SampleMetrics,
     Close,
+    PromptResponse(Vec<String>),
 }
 
 #[derive(Debug, Clone)]
 pub enum BackendEvent {
+    PromptRequest {
+        tab_id: String,
+        prompt_type: PromptType,
+        instruction: String,
+        prompts: Vec<PromptInfo>,
+    },
     Output {
         tab_id: String,
         bytes: Vec<u8>,

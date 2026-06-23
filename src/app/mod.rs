@@ -197,6 +197,7 @@ pub(crate) enum DialogKind {
     SessionSelector,
     Transfers,
     NewSsh,
+    PromptRequest,
 }
 
 pub(crate) struct Ashell {
@@ -625,7 +626,7 @@ impl Ashell {
 
         this.apply_theme_preferences(window, cx);
         // this.open_local(cx);
-        this.start_event_pump(cx);
+        this.start_event_pump(window, cx);
         this
     }
 
@@ -687,17 +688,19 @@ impl Ashell {
         cx.notify();
     }
 
-    pub(crate) fn start_event_pump(&self, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
+    pub(crate) fn start_event_pump(&self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.spawn_in(window, async move |this, mut cx| {
             let mut idle_frames = 0u32;
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(16))
                     .await;
-                if this
-                    .update(cx, |this, cx| {
-                        let changed = this.drain_backend_events();
-                        let system_sampled = this.sample_system_if_due();
+                let mut changed = false;
+                let mut system_sampled = false;
+                let update_res = gpui::AsyncWindowContext::update(&mut cx, |window, cx| {
+                    let _ = this.update(cx, |this, cx| {
+                        changed = this.drain_backend_events(window, cx);
+                        system_sampled = this.sample_system_if_due();
                         this.sync_theme_if_due(cx);
                         if changed || system_sampled {
                             cx.notify();
@@ -709,9 +712,9 @@ impl Ashell {
                                 idle_frames = 0;
                             }
                         }
-                    })
-                    .is_err()
-                {
+                    });
+                });
+                if update_res.is_err() {
                     break;
                 }
             }
@@ -719,7 +722,7 @@ impl Ashell {
         .detach();
     }
 
-    pub(crate) fn drain_backend_events(&mut self) -> bool {
+    pub(crate) fn drain_backend_events(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let mut changed = false;
         let mut transfers_changed = false;
         while let Ok(event) = self.events_rx.try_recv() {
@@ -757,6 +760,21 @@ impl Ashell {
                     {
                         self.connection_progress = None;
                     }
+                }
+                BackendEvent::PromptRequest {
+                    tab_id,
+                    prompt_type,
+                    instruction,
+                    prompts,
+                } => {
+                    self.show_interactive_prompt_dialog(
+                        tab_id,
+                        prompt_type,
+                        instruction,
+                        prompts,
+                        window,
+                        cx,
+                    );
                 }
                 BackendEvent::SftpEntries {
                     tab_id,

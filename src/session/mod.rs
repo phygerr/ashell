@@ -100,6 +100,7 @@ impl Ashell {
                 }
                 Session::key(host, port, user, key_path, key_inline, passphrase)
             }
+            AuthMethod::KeyboardInteractive => Session::keyboard_interactive(host, port, user),
         };
         session.name = name;
         if let Some(id) = existing_id {

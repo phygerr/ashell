@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum AuthMethod {
     Password,
     Key,
+    KeyboardInteractive,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,6 +71,27 @@ impl Session {
             private_key_path,
             private_key_inline,
             passphrase,
+            last_used: None,
+        }
+    }
+
+    pub fn keyboard_interactive(
+        host: String,
+        port: u16,
+        user: String,
+    ) -> Self {
+        let name = format!("{user}@{host}");
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name,
+            host,
+            port,
+            user,
+            auth: AuthMethod::KeyboardInteractive,
+            password: String::new(),
+            private_key_path: String::new(),
+            private_key_inline: String::new(),
+            passphrase: String::new(),
             last_used: None,
         }
     }
