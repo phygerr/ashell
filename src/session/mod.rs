@@ -805,6 +805,15 @@ impl Ashell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // If the search bar is visible and the click is inside it, let the
+        // search bar handle the event instead of switching pane focus.
+        if self.search_active {
+            if let Some(bounds) = self.search_bar_bounds {
+                if bounds.contains(&event.position) {
+                    return;
+                }
+            }
+        }
         self.focus_handle.focus(window, cx);
         // Check if click is in a different pane and focus it
         let click_pos = event.position;
@@ -1052,7 +1061,16 @@ impl Ashell {
         if let Some(new_path) = Self::find_adjacent_pane(&self.pane_root, &path, direction) {
             self.focused_pane_path = new_path;
             if let Some(id) = self.pane_root.focused_tab_id(&self.focused_pane_path) {
-                self.active_tab = Some(id.to_string());
+                let id_owned = id.to_string();
+                let changed = self.active_tab.as_deref() != Some(id_owned.as_str());
+                self.active_tab = Some(id_owned);
+                // Clear stale search state when switching to a different pane.
+                if changed && self.search_active {
+                    self.search_query.clear();
+                    self.search_matches.clear();
+                    self.search_current = 0;
+                    self.search_target_tab = None;
+                }
             }
         }
     }
@@ -1335,8 +1353,17 @@ impl Ashell {
         }
         let mut path = Vec::new();
         if find_path(&self.pane_root, &tab_id, &mut path) {
+            let changed = self.active_tab.as_deref() != Some(tab_id.as_str());
             self.focused_pane_path = path;
             self.active_tab = Some(tab_id);
+            // Clear stale search state when switching to a different pane.
+            // The user can press Enter to re-search in the new pane.
+            if changed && self.search_active {
+                self.search_query.clear();
+                self.search_matches.clear();
+                self.search_current = 0;
+                self.search_target_tab = None;
+            }
         }
     }
 }

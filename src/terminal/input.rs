@@ -3,8 +3,8 @@ use std::ops::Range;
 use alacritty_terminal::index::Side;
 use alacritty_terminal::selection::SelectionType;
 use gpui::{
-    ClipboardItem, Context, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, Pixels, Point, ScrollDelta, ScrollWheelEvent, Window, px,
+    ClipboardItem, Context, Focusable as _, KeyDownEvent, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollDelta, ScrollWheelEvent, Window, px,
 };
 
 use crate::{
@@ -19,6 +19,17 @@ impl Ashell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // If the search input is focused, skip terminal key processing
+        // so the input can handle text entry, paste, etc. normally.
+        if self
+            .search_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
+            return;
+        }
+
         // Pane navigation: Alt + h/j/k/l
         if event.keystroke.modifiers.alt
             && !event.keystroke.modifiers.shift

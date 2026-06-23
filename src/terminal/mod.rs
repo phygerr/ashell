@@ -7,7 +7,7 @@ use std::sync::mpsc::Sender;
 use alacritty_terminal::{
     event::{Event, EventListener},
     grid::{Dimensions, Scroll},
-    index::{Column, Point, Side},
+    index::{Column, Line, Point, Side},
     selection::{Selection, SelectionRange, SelectionType},
     term::{Config, Term, TermMode, cell::Cell, point_to_viewport, viewport_to_point},
     vte::ansi::{CursorShape, Processor},
@@ -337,6 +337,34 @@ impl TerminalTab {
             rows: self.rows as usize,
             cols: self.cols as usize,
         }
+    }
+
+    /// Return `(grid_line_base, rows_data)` for the **entire** terminal buffer
+    /// including scrollback history. `grid_line_base` is the grid line index of
+    /// the first row (typically `-history_size`). Each entry in `rows_data` is
+    /// a sorted `Vec<(col, char)>` for that row.
+    pub fn full_grid_rows(&self) -> (i32, Vec<Vec<(i32, char)>>) {
+        let grid = self.term.grid();
+        let history = grid.history_size() as i32;
+        let screen = grid.screen_lines() as i32;
+        let total = history + screen;
+        let cols = self.cols as i32;
+        let start_line = -history;
+
+        let mut rows_data: Vec<Vec<(i32, char)>> = Vec::with_capacity(total as usize);
+        for line_idx in start_line..(start_line + total) {
+            let line = Line(line_idx);
+            let mut cells: Vec<(i32, char)> = Vec::new();
+            for col_idx in 0..cols {
+                let point = Point::new(line, Column(col_idx as usize));
+                let c = grid[point].c;
+                if c != ' ' && c != '\0' {
+                    cells.push((col_idx, c));
+                }
+            }
+            rows_data.push(cells);
+        }
+        (start_line, rows_data)
     }
 
     pub fn scroll_history(&mut self, delta: i32) {
