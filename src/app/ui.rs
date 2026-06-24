@@ -1980,7 +1980,7 @@ impl Ashell {
     fn render_window_controls(
         &self,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let is_macos = cfg!(target_os = "macos");
         let is_fullscreen = window.is_fullscreen();
@@ -1998,7 +1998,10 @@ impl Ashell {
                         .rounded_full()
                         .bg(hsla(0.0, 0.8, 0.4, 1.0)) // Red
                         .when(!is_macos, |this| this.window_control_area(gpui::WindowControlArea::Close))
-                        .on_click(|_, window, _| window.remove_window())
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.save_layout_state(window, cx);
+                            window.remove_window();
+                        }))
                         .hover(|s| s.bg(hsla(0.0, 0.8, 0.5, 1.0)))
                         .active(|s| s.bg(hsla(0.0, 0.8, 0.3, 1.0))),
                 )
