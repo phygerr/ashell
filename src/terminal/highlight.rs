@@ -155,11 +155,6 @@ fn highlight_colors() -> HighlightColors {
     }
 }
 
-/// Case-insensitive ASCII comparison.
-fn eq_ignore_ascii_case(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).all(|(x, y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
-}
-
 /// Highlight all occurrences of keyword list in `text`, writing to `map`.
 /// Case-insensitive, matches inside larger words (e.g. "my_ERROR" highlights "ERROR").
 /// Each keyword only matches once per position (no overlapping highlights).
