@@ -2366,9 +2366,9 @@ impl Ashell {
                 let scrollbar = this.terminal_scrollbars.entry(tab_id.clone()).or_default();
                 el = el.vertical_scrollbar(scrollbar);
 
-                // When disconnected, show a reconnect bar below the terminal.
-                // The terminal content (history) remains visible and interactive —
-                // users can select/copy text. Press Enter to reconnect.
+                // When disconnected, overlay a reconnect bar at the bottom of the terminal.
+                // Uses absolute positioning so the terminal element itself is unchanged,
+                // keeping panel size stable in multi-panel layouts.
                 let disconnected_reason = this
                     .tabs
                     .iter()
@@ -2376,39 +2376,42 @@ impl Ashell {
                     .and_then(|tab| tab.disconnected_reason.clone());
                 if let Some(reason) = disconnected_reason {
                     let tab_id_for_reconnect = tab_id.clone();
-                    el = v_flex()
+                    el = div()
                         .size_full()
+                        .relative()
+                        .child(el)
                         .child(
                             div()
-                                .flex_1()
-                                .overflow_hidden()
-                                .child(el),
-                        )
-                        .child(
-                            h_flex()
-                                .w_full()
-                                .items_center()
-                                .gap_2()
-                                .px_3()
-                                .py_1()
-                                .bg(cx.theme().danger.opacity(0.15))
+                                .absolute()
+                                .bottom_0()
+                                .left_0()
+                                .right_0()
                                 .child(
-                                    div()
-                                        .text_size(rems(0.85))
-                                        .text_color(cx.theme().danger)
-                                        .child(t!("session_disconnected", "reason" = reason).to_string()),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(rems(0.85))
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!("— {}", t!("press_enter_to_reconnect"))),
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.retry_disconnected_tab(&tab_id_for_reconnect, cx);
-                                    }),
+                                    h_flex()
+                                        .w_full()
+                                        .items_center()
+                                        .gap_2()
+                                        .px_3()
+                                        .py_1()
+                                        .bg(cx.theme().danger.opacity(0.15))
+                                        .child(
+                                            div()
+                                                .text_size(rems(0.85))
+                                                .text_color(cx.theme().danger)
+                                                .child(t!("session_disconnected", "reason" = reason).to_string()),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(rems(0.85))
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(format!("— {}", t!("press_enter_to_reconnect"))),
+                                        )
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.retry_disconnected_tab(&tab_id_for_reconnect, cx);
+                                            }),
+                                        ),
                                 ),
                         );
                 }
