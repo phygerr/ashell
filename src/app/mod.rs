@@ -211,6 +211,16 @@ pub(crate) struct Ashell {
     pub(crate) key_path_input: Entity<InputState>,
     pub(crate) key_inline_input: Entity<InputState>,
     pub(crate) passphrase_input: Entity<InputState>,
+    pub(crate) ssh_proxy_type: String,
+    pub(crate) proxy_host_input: Entity<InputState>,
+    pub(crate) proxy_port_input: Entity<InputState>,
+    pub(crate) proxy_user_input: Entity<InputState>,
+    pub(crate) proxy_password_input: Entity<InputState>,
+    pub(crate) global_proxy_type: String,
+    pub(crate) global_proxy_host_input: Entity<InputState>,
+    pub(crate) global_proxy_port_input: Entity<InputState>,
+    pub(crate) global_proxy_user_input: Entity<InputState>,
+    pub(crate) global_proxy_password_input: Entity<InputState>,
     pub(crate) sync_endpoint_input: Entity<InputState>,
     pub(crate) sync_username_input: Entity<InputState>,
     pub(crate) sync_webdav_password_input: Entity<InputState>,
@@ -273,6 +283,7 @@ pub(crate) struct Ashell {
     pub(crate) status: SharedString,
     pub(crate) config: ConfigStore,
     pub(crate) active_title_bar_style: crate::session::config::TitleBarStyle,
+    pub(crate) cursor_style: crate::session::config::CursorStyle,
     pub(crate) system_sampler: SystemSampler,
     pub(crate) recording_action: Option<String>,
     pub(crate) active_dialog: Option<DialogKind>,
@@ -302,6 +313,8 @@ pub(crate) struct Ashell {
     pub(crate) runtime: Runtime,
     pub(crate) events_rx: mpsc::Receiver<BackendEvent>,
     pub(crate) events_tx: mpsc::Sender<BackendEvent>,
+    pub(crate) last_window_size: Option<gpui::Size<Pixels>>,
+    pub(crate) last_sidebar_width: Option<Pixels>,
     pub(crate) _subscriptions: Vec<gpui::Subscription>,
 }
 
@@ -364,6 +377,10 @@ impl Ashell {
                 .placeholder("SSH private key passphrase (optional)")
                 .masked(true)
         });
+        let proxy_host_input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("proxy_host").to_string()));
+        let proxy_port_input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("proxy_port").to_string()));
+        let proxy_user_input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("proxy_user").to_string()));
+        let proxy_password_input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("proxy_password").to_string()).masked(true));
         let sftp_path_input = cx.new(|cx| InputState::new(window, cx).default_value("/"));
         let sftp_new_folder_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("new_folder").to_string()));
@@ -373,6 +390,27 @@ impl Ashell {
         let config = ConfigStore::load().unwrap_or_else(|err| {
             tracing::warn!("failed to load config: {err:#}");
             ConfigStore::in_memory()
+        });
+        let global_proxy_host_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("proxy_host").to_string())
+                .default_value(config.global_proxy_host())
+        });
+        let global_proxy_port_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("proxy_port").to_string())
+                .default_value(config.global_proxy_port().map(|p| p.to_string()).unwrap_or_default())
+        });
+        let global_proxy_user_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("proxy_user").to_string())
+                .default_value(config.global_proxy_user())
+        });
+        let global_proxy_password_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t!("proxy_password").to_string())
+                .masked(true)
+                .default_value(config.global_proxy_password())
         });
         let sync_endpoint_input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -437,6 +475,10 @@ impl Ashell {
             cx.subscribe_in(&key_path_input, window, Self::on_input_event),
             cx.subscribe_in(&key_inline_input, window, Self::on_input_event),
             cx.subscribe_in(&passphrase_input, window, Self::on_input_event),
+            cx.subscribe_in(&proxy_host_input, window, Self::on_input_event),
+            cx.subscribe_in(&proxy_port_input, window, Self::on_input_event),
+            cx.subscribe_in(&proxy_user_input, window, Self::on_input_event),
+            cx.subscribe_in(&proxy_password_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_path_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_new_folder_input, window, Self::on_input_event),
             cx.subscribe_in(&search_input, window, Self::on_input_event),
@@ -496,6 +538,10 @@ impl Ashell {
         gpui_component::set_locale(&active_locale);
         let ui_font_family: SharedString = config.ui_font_family().into();
         let terminal_font_family: SharedString = config.terminal_font_family().into();
+        let last_sidebar_width = Some(px(config
+            .workspace_panels()
+            .and_then(|s| s.first().copied())
+            .unwrap_or(constants::SIDEBAR_WIDTH)));
         let mut this = Self {
             focus_handle: cx.focus_handle(),
             selector_focus_handle: cx.focus_handle(),
@@ -507,6 +553,16 @@ impl Ashell {
             key_path_input,
             key_inline_input,
             passphrase_input,
+            ssh_proxy_type: "none".to_string(),
+            proxy_host_input,
+            proxy_port_input,
+            proxy_user_input,
+            proxy_password_input,
+            global_proxy_type: config.global_proxy_type().to_string(),
+            global_proxy_host_input,
+            global_proxy_port_input,
+            global_proxy_user_input,
+            global_proxy_password_input,
             sync_endpoint_input,
             sync_username_input,
             sync_webdav_password_input,
@@ -529,6 +585,7 @@ impl Ashell {
             dark_theme_name,
             ui_font_size: config.ui_font_size(),
             terminal_font_size: config.terminal_font_size(),
+            cursor_style: config.cursor_style(),
             ui_font_family,
             terminal_font_family,
             tabs: Vec::new(),
@@ -609,6 +666,8 @@ impl Ashell {
             runtime: Runtime::new().expect("create tokio runtime"),
             events_rx,
             events_tx,
+            last_window_size: None,
+            last_sidebar_width,
             _subscriptions,
         };
 
@@ -679,6 +738,7 @@ impl Ashell {
     pub(crate) fn start_event_pump(&self, window: &mut Window, cx: &mut Context<Self>) {
         cx.spawn_in(window, async move |this, mut cx| {
             let mut idle_frames = 0u32;
+            let mut last_blink_time = std::time::Instant::now();
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(16))
@@ -690,9 +750,19 @@ impl Ashell {
                         changed = this.drain_backend_events(window, cx);
                         system_sampled = this.sample_system_if_due();
                         this.sync_theme_if_due(cx);
-                        if changed || system_sampled {
+                        let is_blinking = matches!(
+                            this.cursor_style,
+                            crate::session::config::CursorStyle::Blink
+                                | crate::session::config::CursorStyle::BeamBlink
+                        );
+                        let now = std::time::Instant::now();
+                        let blink_due = is_blinking && now.duration_since(last_blink_time) >= std::time::Duration::from_millis(600);
+                        if changed || system_sampled || blink_due {
                             cx.notify();
                             idle_frames = 0;
+                            if blink_due {
+                                last_blink_time = now;
+                            }
                         } else {
                             idle_frames += 1;
                             if idle_frames >= 60 {
@@ -831,6 +901,11 @@ impl Ashell {
                         tab.connected = false;
                         tab.status = reason.clone();
                         tab.disconnected_reason = Some(reason.clone());
+                    }
+                    let is_sftp = self.tab_groups.iter().any(|g| g.id == tab_id);
+                    if is_sftp {
+                        tab_title = self.tab_groups.iter().find(|g| g.id == tab_id).map(|g| g.title.clone());
+                        session_label = Some("sftp".to_string());
                     }
                     if self.system_tab_id.as_deref() == Some(tab_id.as_str()) {
                         self.system_status = Some(reason.clone().into());
@@ -1005,5 +1080,91 @@ impl Ashell {
         self.transfers.retain(|t| t.info.id != transfer_id);
         self.config.set_transfers(self.transfers.clone());
         cx.notify();
+    }
+
+    pub(crate) fn save_layout_state(&self, window: &mut gpui::Window, cx: &gpui::App) {
+        if self.is_layout_reset {
+            tracing::info!("[ui] layout was reset, skipping save layout state.");
+            return;
+        }
+        let current_bounds = window.window_bounds();
+        let bounds = match current_bounds {
+            gpui::WindowBounds::Fullscreen(b) => b,
+            gpui::WindowBounds::Maximized(b) => b,
+            gpui::WindowBounds::Windowed(b) => b,
+        };
+        let size = bounds.size;
+        if size.width.as_f32() > 400.0 && size.height.as_f32() > 300.0 {
+            tracing::info!("[ui] saving layout state...");
+            let mut config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
+            let saved_bounds = match current_bounds {
+                gpui::WindowBounds::Fullscreen(b) => {
+                    crate::session::config::SavedWindowBounds::Fullscreen {
+                        x: b.origin.x.into(),
+                        y: b.origin.y.into(),
+                        width: b.size.width.into(),
+                        height: b.size.height.into(),
+                    }
+                }
+                gpui::WindowBounds::Maximized(b) => {
+                    let mut restore_bounds = (b.origin.x.into(), b.origin.y.into(), b.size.width.into(), b.size.height.into());
+                    if let Some(existing_bounds) = config.window_bounds() {
+                        match existing_bounds {
+                            crate::session::config::SavedWindowBounds::Windowed { x, y, width, height } => {
+                                restore_bounds = (*x, *y, *width, *height);
+                            }
+                            crate::session::config::SavedWindowBounds::Maximized { x, y, width, height } => {
+                                restore_bounds = (*x, *y, *width, *height);
+                            }
+                            _ => {}
+                        }
+                    }
+                    crate::session::config::SavedWindowBounds::Maximized {
+                        x: restore_bounds.0,
+                        y: restore_bounds.1,
+                        width: restore_bounds.2,
+                        height: restore_bounds.3,
+                    }
+                }
+                gpui::WindowBounds::Windowed(b) => {
+                    crate::session::config::SavedWindowBounds::Windowed {
+                        x: b.origin.x.into(),
+                        y: b.origin.y.into(),
+                        width: b.size.width.into(),
+                        height: b.size.height.into(),
+                    }
+                }
+            };
+            let workspace_sizes: Vec<f32> = self.workspace_panels
+                .read(cx)
+                .sizes()
+                .iter()
+                .map(|s| s.into())
+                .collect();
+            let mut body_sizes: Vec<f32> = self.body_panels
+                .read(cx)
+                .sizes()
+                .iter()
+                .map(|s| s.into())
+                .collect();
+
+            if self.sftp_panel_minimized {
+                if let Some(prev) = self.prev_monitoring_size {
+                    if body_sizes.len() > 1 {
+                        body_sizes[1] = prev.into();
+                    }
+                }
+            }
+
+            config.set_layout_state(Some(saved_bounds), Some(workspace_sizes), Some(body_sizes));
+            config.set_sidebar_collapsed(self.sidebar_collapsed);
+            config.set_sftp_panel_minimized(self.sftp_panel_minimized);
+            let _ = config.save();
+        } else {
+            tracing::warn!(
+                "[ui] window size is too small ({:?}), skipping save layout state to prevent corrupting saved bounds.",
+                size
+            );
+        }
     }
 }

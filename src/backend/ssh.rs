@@ -265,11 +265,18 @@ async fn connect_and_authenticate(
         addr,
         session.user
     );
+    let status_text = if let Some((ptype, phost, pport)) = crate::session::config::active_proxy(session) {
+        let pport_val = pport.unwrap_or_else(|| if ptype == "http" { 8080 } else { 1080 });
+        format!("connecting to {addr} via {} proxy {}:{}", ptype.to_uppercase(), phost, pport_val)
+    } else {
+        format!("opening tcp connection to {addr}")
+    };
     let _ = events.send(BackendEvent::Status {
         tab_id: tab_id.to_string(),
-        text: format!("opening tcp connection to {addr}"),
+        text: status_text,
     });
-    let mut handle = client::connect(config, addr.as_str(), ClientHandler)
+    let stream = crate::session::config::connect_proxy(session).await?;
+    let mut handle = client::connect_stream(config, stream, ClientHandler)
         .await
         .with_context(|| format!("connect {addr} failed"))?;
 

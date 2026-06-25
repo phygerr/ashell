@@ -162,6 +162,12 @@ pub(crate) fn sync_macos_launch_environment() {
                 | "HOMEBREW_PREFIX"
                 | "HOMEBREW_CELLAR"
                 | "HOMEBREW_REPOSITORY"
+                | "HTTP_PROXY"
+                | "HTTPS_PROXY"
+                | "ALL_PROXY"
+                | "http_proxy"
+                | "https_proxy"
+                | "all_proxy"
         ) || key.starts_with("LC_");
 
         if should_import {
@@ -172,11 +178,55 @@ pub(crate) fn sync_macos_launch_environment() {
     }
 }
 
+fn read_proxy_from_env() -> Option<(String, String, Option<u16>, String, String)> {
+    let vars = ["ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"];
+    for var in vars {
+        if let Ok(val) = std::env::var(var) {
+            if val.is_empty() {
+                continue;
+            }
+            if let Ok(url) = reqwest::Url::parse(&val) {
+                let scheme = url.scheme();
+                let proxy_type = match scheme {
+                    "socks5" | "socks5h" => "socks5".to_string(),
+                    "http" | "https" => "http".to_string(),
+                    _ => "socks5".to_string(),
+                };
+                let host = url.host_str().unwrap_or("").to_string();
+                let port = url.port();
+                let user = url.username().to_string();
+                let password = url.password().unwrap_or("").to_string();
+                return Some((proxy_type, host, port, user, password));
+            }
+        }
+    }
+    None
+}
+
 #[cfg(not(target_os = "macos"))]
 pub(crate) fn sync_macos_launch_environment() {}
 
 pub(crate) fn open_main_window(cx: &mut App) {
     let config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
+
+    let _ = crate::session::config::ENV_PROXY.get_or_init(|| {
+        read_proxy_from_env().map(|(proxy_type, host, port, user, password)| {
+            tracing::info!(
+                "[proxy] Loaded proxy configuration from environment: type={}, host={}, port={:?}, user={}",
+                proxy_type,
+                host,
+                port,
+                user
+            );
+            crate::session::config::EnvProxy {
+                proxy_type,
+                host,
+                port,
+                user,
+                pass: password,
+            }
+        })
+    });
 
     let mut window_options = WindowOptions::default();
 
@@ -253,81 +303,14 @@ pub(crate) fn open_main_window(cx: &mut App) {
 
 
 
-        let workspace_panels_clone = view.read(cx).workspace_panels.clone();
-        let body_panels_clone = view.read(cx).body_panels.clone();
         let view_clone = view.clone();
         window.on_window_should_close(cx, move |window: &mut gpui::Window, cx: &mut gpui::App| {
-            if view_clone.read(cx).is_layout_reset {
-                tracing::info!("[ui] layout was reset, skipping save layout state.");
+            let handle = window.window_handle();
+            if !cx.windows().contains(&handle) {
+                tracing::warn!("[ui] window not found in app during close, skipping save layout state.");
                 return true;
             }
-            let current_bounds = window.window_bounds();
-            let bounds = match current_bounds {
-                gpui::WindowBounds::Fullscreen(b) => b,
-                gpui::WindowBounds::Maximized(b) => b,
-                gpui::WindowBounds::Windowed(b) => b,
-            };
-            let size = bounds.size;
-            if size.width.as_f32() > 400.0 && size.height.as_f32() > 300.0 {
-                tracing::info!("[ui] main application window closed, saving layout state...");
-                let mut config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
-                let saved_bounds = match current_bounds {
-                    gpui::WindowBounds::Fullscreen(b) => {
-                        crate::session::config::SavedWindowBounds::Fullscreen {
-                            x: b.origin.x.into(),
-                            y: b.origin.y.into(),
-                            width: b.size.width.into(),
-                            height: b.size.height.into(),
-                        }
-                    }
-                    gpui::WindowBounds::Maximized(b) => {
-                        crate::session::config::SavedWindowBounds::Maximized {
-                            x: b.origin.x.into(),
-                            y: b.origin.y.into(),
-                            width: b.size.width.into(),
-                            height: b.size.height.into(),
-                        }
-                    }
-                    gpui::WindowBounds::Windowed(b) => {
-                        crate::session::config::SavedWindowBounds::Windowed {
-                            x: b.origin.x.into(),
-                            y: b.origin.y.into(),
-                            width: b.size.width.into(),
-                            height: b.size.height.into(),
-                        }
-                    }
-                };
-                let workspace_sizes: Vec<f32> = workspace_panels_clone
-                    .read(cx)
-                    .sizes()
-                    .iter()
-                    .map(|s| s.into())
-                    .collect();
-                let mut body_sizes: Vec<f32> = body_panels_clone
-                    .read(cx)
-                    .sizes()
-                    .iter()
-                    .map(|s| s.into())
-                    .collect();
-
-                if view_clone.read(cx).sftp_panel_minimized {
-                    if let Some(prev) = view_clone.read(cx).prev_monitoring_size {
-                        if body_sizes.len() > 1 {
-                            body_sizes[1] = prev.into();
-                        }
-                    }
-                }
-
-                config.set_layout_state(Some(saved_bounds), Some(workspace_sizes), Some(body_sizes));
-                config.set_sidebar_collapsed(view_clone.read(cx).sidebar_collapsed);
-                config.set_sftp_panel_minimized(view_clone.read(cx).sftp_panel_minimized);
-                let _ = config.save();
-            } else {
-                tracing::warn!(
-                    "[ui] window size is too small ({:?}), skipping save layout state to prevent corrupting saved bounds.",
-                    size
-                );
-            }
+            view_clone.read(cx).save_layout_state(window, cx);
             true
         });
 

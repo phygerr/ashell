@@ -464,11 +464,35 @@ impl TerminalElement {
     }
 
     fn cursor_layout(&self, cx: &App) -> Option<CursorLayout> {
-        self.snapshot.cursor.map(|cursor| CursorLayout {
-            row: cursor.row,
-            col: cursor.col,
-            shape: cursor.shape,
-            color: cx.theme().primary,
+        use crate::session::config::CursorStyle;
+        let cursor_style = self.view.read(cx).cursor_style;
+        let show_cursor = match cursor_style {
+            CursorStyle::Blink | CursorStyle::BeamBlink => {
+                if let Ok(duration) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                    (duration.as_millis() / 600) % 2 == 0
+                } else {
+                    true
+                }
+            }
+            _ => true,
+        };
+
+        self.snapshot.cursor.map(|cursor| {
+            let mut shape = match cursor_style {
+                CursorStyle::Default => cursor.shape,
+                CursorStyle::Blink => CursorShape::Block,
+                CursorStyle::Beam => CursorShape::Beam,
+                CursorStyle::BeamBlink => CursorShape::Beam,
+            };
+            if !show_cursor {
+                shape = CursorShape::Hidden;
+            }
+            CursorLayout {
+                row: cursor.row,
+                col: cursor.col,
+                shape,
+                color: cx.theme().primary,
+            }
         })
     }
 }

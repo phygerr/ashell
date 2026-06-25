@@ -205,7 +205,7 @@ impl Ashell {
         cx.notify();
     }
 
-    fn active_terminal_selection_text(&self) -> Option<String> {
+    pub(crate) fn active_terminal_selection_text(&self) -> Option<String> {
         let active_id = self.active_tab.as_ref()?;
         self.tabs
             .iter()
@@ -213,7 +213,7 @@ impl Ashell {
             .and_then(|tab| tab.selection_text())
     }
 
-    fn paste_into_terminal(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn paste_into_terminal(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         let Some(active_id) = self.active_tab.clone() else {
             return;
         };

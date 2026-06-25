@@ -31,6 +31,16 @@ pub struct Session {
     pub passphrase: String,
     #[serde(default)]
     pub last_used: Option<String>,
+    #[serde(default)]
+    pub proxy_type: String, // "none", "socks5", "http"
+    #[serde(default)]
+    pub proxy_host: String,
+    #[serde(default)]
+    pub proxy_port: Option<u16>,
+    #[serde(default)]
+    pub proxy_user: String,
+    #[serde(default)]
+    pub proxy_password: String,
 }
 
 impl Session {
@@ -48,6 +58,11 @@ impl Session {
             private_key_inline: String::new(),
             passphrase: String::new(),
             last_used: None,
+            proxy_type: "none".to_string(),
+            proxy_host: String::new(),
+            proxy_port: None,
+            proxy_user: String::new(),
+            proxy_password: String::new(),
         }
     }
 
@@ -72,6 +87,11 @@ impl Session {
             private_key_inline,
             passphrase,
             last_used: None,
+            proxy_type: "none".to_string(),
+            proxy_host: String::new(),
+            proxy_port: None,
+            proxy_user: String::new(),
+            proxy_password: String::new(),
         }
     }
 
@@ -93,6 +113,11 @@ impl Session {
             private_key_inline: String::new(),
             passphrase: String::new(),
             last_used: None,
+            proxy_type: "none".to_string(),
+            proxy_host: String::new(),
+            proxy_port: None,
+            proxy_user: String::new(),
+            proxy_password: String::new(),
         }
     }
 }
@@ -128,7 +153,17 @@ pub enum TitleBarStyle {
     Integrated,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum CursorStyle {
+    #[default]
+    Default,
+    Blink,
+    Beam,
+    BeamBlink,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigFile {
     #[serde(default = "default_follow_system_theme")]
     pub follow_system_theme: bool,
@@ -154,6 +189,8 @@ pub struct ConfigFile {
     pub terminal_font_family: String,
     #[serde(default)]
     pub title_bar_style: TitleBarStyle,
+    #[serde(default)]
+    pub cursor_style: CursorStyle,
     #[serde(default)]
     pub sessions: Vec<Session>,
     #[serde(default)]
@@ -194,6 +231,28 @@ pub struct ConfigFile {
     pub sync_s3_bucket: String,
     #[serde(default = "default_s3_object_key")]
     pub sync_s3_object_key: String,
+    #[serde(default)]
+    pub use_proxy: bool,
+    #[serde(default = "default_read_env_proxy")]
+    pub read_env_proxy: bool,
+    #[serde(default = "default_global_proxy_type")]
+    pub global_proxy_type: String,
+    #[serde(default)]
+    pub global_proxy_host: String,
+    #[serde(default)]
+    pub global_proxy_port: Option<u16>,
+    #[serde(default)]
+    pub global_proxy_user: String,
+    #[serde(default)]
+    pub global_proxy_password: String,
+}
+
+fn default_read_env_proxy() -> bool {
+    true
+}
+
+fn default_global_proxy_type() -> String {
+    "socks5".to_string()
 }
 
 fn default_monitoring_position() -> String {
@@ -232,6 +291,53 @@ pub fn default_ui_font_family() -> String {
 
 fn default_terminal_font_family() -> String {
     "Maple Mono NF CN".to_string()
+}
+
+impl Default for ConfigFile {
+    fn default() -> Self {
+        Self {
+            follow_system_theme: default_follow_system_theme(),
+            theme_mode: String::new(),
+            light_theme_name: String::new(),
+            dark_theme_name: String::new(),
+            locale: default_locale(),
+            terminal_font_size: default_terminal_font_size(),
+            ui_font_size: default_ui_font_size(),
+            right_click_copy_paste: false,
+            keyword_highlight: true,
+            ui_font_family: default_ui_font_family(),
+            terminal_font_family: default_terminal_font_family(),
+            title_bar_style: TitleBarStyle::default(),
+            cursor_style: CursorStyle::default(),
+            sessions: Vec::new(),
+            window_bounds: None,
+            workspace_panels: None,
+            body_panels: None,
+            transfers: Vec::new(),
+            show_hidden_files: false,
+            monitoring_position: default_monitoring_position(),
+            sidebar_collapsed: false,
+            sftp_panel_minimized: false,
+            key_bindings: std::collections::HashMap::new(),
+            sync_endpoint: String::new(),
+            sync_username: String::new(),
+            sync_etag: None,
+            sync_device_id: String::new(),
+            sync_backend: String::new(),
+            sync_etag_backend: String::new(),
+            sync_s3_endpoint: String::new(),
+            sync_s3_region: default_s3_region(),
+            sync_s3_bucket: String::new(),
+            sync_s3_object_key: default_s3_object_key(),
+            use_proxy: false,
+            read_env_proxy: true,
+            global_proxy_type: default_global_proxy_type(),
+            global_proxy_host: String::new(),
+            global_proxy_port: None,
+            global_proxy_user: String::new(),
+            global_proxy_password: String::new(),
+        }
+    }
 }
 
 pub struct ConfigStore {
@@ -564,6 +670,57 @@ impl ConfigStore {
         self.cache.title_bar_style = style;
     }
 
+    pub fn cursor_style(&self) -> CursorStyle {
+        self.cache.cursor_style
+    }
+
+    pub fn set_cursor_style(&mut self, style: CursorStyle) {
+        self.cache.cursor_style = style;
+    }
+
+    pub fn use_proxy(&self) -> bool {
+        self.cache.use_proxy
+    }
+    pub fn set_use_proxy(&mut self, val: bool) {
+        self.cache.use_proxy = val;
+    }
+    pub fn read_env_proxy(&self) -> bool {
+        self.cache.read_env_proxy
+    }
+    pub fn set_read_env_proxy(&mut self, val: bool) {
+        self.cache.read_env_proxy = val;
+    }
+    pub fn global_proxy_type(&self) -> &str {
+        &self.cache.global_proxy_type
+    }
+    pub fn set_global_proxy_type(&mut self, val: String) {
+        self.cache.global_proxy_type = val;
+    }
+    pub fn global_proxy_host(&self) -> &str {
+        &self.cache.global_proxy_host
+    }
+    pub fn set_global_proxy_host(&mut self, val: String) {
+        self.cache.global_proxy_host = val;
+    }
+    pub fn global_proxy_port(&self) -> Option<u16> {
+        self.cache.global_proxy_port
+    }
+    pub fn set_global_proxy_port(&mut self, val: Option<u16>) {
+        self.cache.global_proxy_port = val;
+    }
+    pub fn global_proxy_user(&self) -> &str {
+        &self.cache.global_proxy_user
+    }
+    pub fn set_global_proxy_user(&mut self, val: String) {
+        self.cache.global_proxy_user = val;
+    }
+    pub fn global_proxy_password(&self) -> &str {
+        &self.cache.global_proxy_password
+    }
+    pub fn set_global_proxy_password(&mut self, val: String) {
+        self.cache.global_proxy_password = val;
+    }
+
     pub fn show_hidden_files(&self) -> bool {
         self.cache.show_hidden_files
     }
@@ -622,5 +779,168 @@ impl ConfigStore {
         }
 
         Ok(())
+    }
+}
+
+pub trait ProxyStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static {}
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static> ProxyStream for T {}
+
+use std::sync::OnceLock;
+
+#[derive(Debug, Clone)]
+pub struct EnvProxy {
+    pub proxy_type: String,
+    pub host: String,
+    pub port: Option<u16>,
+    pub user: String,
+    pub pass: String,
+}
+
+pub static ENV_PROXY: OnceLock<Option<EnvProxy>> = OnceLock::new();
+
+pub async fn connect_proxy(session: &Session) -> Result<Box<dyn ProxyStream>> {
+    let target_host = &session.host;
+    let target_port = session.port;
+
+    let config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
+    let (proxy_type, proxy_host, proxy_port, proxy_user, proxy_password) = {
+        if !session.proxy_type.is_empty() && session.proxy_type != "none" {
+            (
+                session.proxy_type.clone(),
+                session.proxy_host.clone(),
+                session.proxy_port,
+                session.proxy_user.clone(),
+                session.proxy_password.clone(),
+            )
+        } else if config.cache.read_env_proxy && ENV_PROXY.get().and_then(|opt| opt.as_ref()).is_some() {
+            let env_p = ENV_PROXY.get().and_then(|opt| opt.as_ref()).unwrap();
+            (
+                env_p.proxy_type.clone(),
+                env_p.host.clone(),
+                env_p.port,
+                env_p.user.clone(),
+                env_p.pass.clone(),
+            )
+        } else if config.cache.use_proxy {
+            (
+                config.cache.global_proxy_type.clone(),
+                config.cache.global_proxy_host.clone(),
+                config.cache.global_proxy_port,
+                config.cache.global_proxy_user.clone(),
+                config.cache.global_proxy_password.clone(),
+            )
+        } else {
+            ("none".to_string(), String::new(), None, String::new(), String::new())
+        }
+    };
+    
+    if proxy_type != "none" && (proxy_host.is_empty() || proxy_port.is_none()) {
+        let addr = format!("{}:{}", target_host, target_port);
+        let stream = tokio::net::TcpStream::connect(&addr).await?;
+        return Ok(Box::new(stream));
+    }
+
+    match proxy_type.as_str() {
+        "socks5" | "socks5h" => {
+            let proxy_port = proxy_port.unwrap_or(1080);
+            let proxy_addr = format!("{}:{}", proxy_host, proxy_port);
+
+            if !proxy_user.is_empty() {
+                let stream = tokio_socks::tcp::Socks5Stream::connect_with_password(
+                    proxy_addr.as_str(),
+                    (target_host.as_str(), target_port),
+                    &proxy_user,
+                    &proxy_password,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("SOCKS5 proxy connection failed: {}", e))?;
+                Ok(Box::new(stream))
+            } else {
+                let stream = tokio_socks::tcp::Socks5Stream::connect(
+                    proxy_addr.as_str(),
+                    (target_host.as_str(), target_port),
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("SOCKS5 proxy connection failed: {}", e))?;
+                Ok(Box::new(stream))
+            }
+        }
+        "http" => {
+            let proxy_port = proxy_port.unwrap_or(8080);
+            let proxy_addr = format!("{}:{}", proxy_host, proxy_port);
+
+            use tokio::io::AsyncWriteExt;
+            let mut stream = tokio::net::TcpStream::connect(&proxy_addr)
+                .await
+                .map_err(|e| anyhow::anyhow!("HTTP proxy connection failed: {}", e))?;
+
+            let mut request = format!(
+                "CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\n",
+                target_host, target_port, target_host, target_port
+            );
+            if !proxy_user.is_empty() {
+                use base64::Engine as _;
+                let auth = format!("{}:{}", proxy_user, proxy_password);
+                let encoded = base64::engine::general_purpose::STANDARD.encode(auth);
+                request.push_str(&format!("Proxy-Authorization: Basic {}\r\n", encoded));
+            }
+            request.push_str("\r\n");
+
+            stream.write_all(request.as_bytes()).await?;
+
+            let mut response = [0u8; 1024];
+            let n = tokio::io::AsyncReadExt::read(&mut stream, &mut response).await?;
+            let resp_str = String::from_utf8_lossy(&response[..n]);
+            if !resp_str.contains("200") && !resp_str.contains("established") {
+                return Err(anyhow::anyhow!("HTTP proxy CONNECT failed: {}", resp_str));
+            }
+
+            Ok(Box::new(stream))
+        }
+        _ => {
+            let addr = format!("{}:{}", target_host, target_port);
+            let stream = tokio::net::TcpStream::connect(&addr).await?;
+            Ok(Box::new(stream))
+        }
+    }
+}
+
+pub fn active_proxy(session: &Session) -> Option<(String, String, Option<u16>)> {
+    let config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
+    let (proxy_type, proxy_host, proxy_port, _, _) = {
+        if !session.proxy_type.is_empty() && session.proxy_type != "none" {
+            (
+                session.proxy_type.clone(),
+                session.proxy_host.clone(),
+                session.proxy_port,
+                session.proxy_user.clone(),
+                session.proxy_password.clone(),
+            )
+        } else if config.cache.read_env_proxy && ENV_PROXY.get().and_then(|opt| opt.as_ref()).is_some() {
+            let env_p = ENV_PROXY.get().and_then(|opt| opt.as_ref()).unwrap();
+            (
+                env_p.proxy_type.clone(),
+                env_p.host.clone(),
+                env_p.port,
+                env_p.user.clone(),
+                env_p.pass.clone(),
+            )
+        } else if config.cache.use_proxy {
+            (
+                config.cache.global_proxy_type.clone(),
+                config.cache.global_proxy_host.clone(),
+                config.cache.global_proxy_port,
+                config.cache.global_proxy_user.clone(),
+                config.cache.global_proxy_password.clone(),
+            )
+        } else {
+            ("none".to_string(), String::new(), None, String::new(), String::new())
+        }
+    };
+    
+    if proxy_type != "none" && !proxy_host.is_empty() && proxy_port.is_some() {
+        Some((proxy_type, proxy_host, proxy_port))
+    } else {
+        None
     }
 }

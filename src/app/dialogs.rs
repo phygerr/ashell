@@ -36,6 +36,10 @@ impl Ashell {
         let key_path_input = self.key_path_input.clone();
         let key_inline_input = self.key_inline_input.clone();
         let passphrase_input = self.passphrase_input.clone();
+        let proxy_host_input = self.proxy_host_input.clone();
+        let proxy_port_input = self.proxy_port_input.clone();
+        let proxy_user_input = self.proxy_user_input.clone();
+        let proxy_password_input = self.proxy_password_input.clone();
 
         window.open_dialog(cx, move |dialog: Dialog, _window, _cx| {
             dialog
@@ -61,12 +65,18 @@ impl Ashell {
                     let key_path_input = key_path_input.clone();
                     let key_inline_input = key_inline_input.clone();
                     let passphrase_input = passphrase_input.clone();
+                    let proxy_host_input = proxy_host_input.clone();
+                    let proxy_port_input = proxy_port_input.clone();
+                    let proxy_user_input = proxy_user_input.clone();
+                    let proxy_password_input = proxy_password_input.clone();
                     move |content, window, cx| {
                         let method = view.read(cx).ssh_auth_method;
                         let is_password = method == AuthMethod::Password;
                         let is_key = method == AuthMethod::Key;
                         let is_kb = method == AuthMethod::KeyboardInteractive;
                         let is_editing = view.read(cx).editing_session_id.is_some();
+                        let proxy_type = view.read(cx).ssh_proxy_type.clone();
+                        let show_proxy_fields = proxy_type != "none";
                         content.child(
                             v_flex()
                                 .gap_3()
@@ -169,6 +179,60 @@ impl Ashell {
                                     )
                                     .child(Input::new(&key_inline_input).h(px(128.)).tab_index(5))
                                     .child(Input::new(&passphrase_input).mask_toggle().tab_index(6))
+                                })
+                                .child(
+                                    div().text_sm().font_weight(FontWeight::BOLD).child(t!("proxy").to_string())
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_2()
+                                        .child(
+                                            Button::new("proxy-none")
+                                                .label(t!("proxy_none").to_string())
+                                                .when(proxy_type == "none", |button| button.primary())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.set_ssh_proxy_type("none".to_string(), cx)
+                                                    },
+                                                )),
+                                        )
+                                        .child(
+                                            Button::new("proxy-socks5")
+                                                .label("SOCKS5")
+                                                .when(proxy_type == "socks5", |button| button.primary())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.set_ssh_proxy_type("socks5".to_string(), cx)
+                                                    },
+                                                )),
+                                        )
+                                        .child(
+                                            Button::new("proxy-http")
+                                                .label("HTTP")
+                                                .when(proxy_type == "http", |button| button.primary())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.set_ssh_proxy_type("http".to_string(), cx)
+                                                    },
+                                                )),
+                                        )
+                                )
+                                .when(show_proxy_fields, |this| {
+                                    this.child(
+                                        h_flex()
+                                            .gap_2()
+                                            .child(Input::new(&proxy_host_input).flex_1())
+                                            .child(Input::new(&proxy_port_input).w(px(96.)))
+                                    )
+                                    .child(
+                                        h_flex()
+                                            .gap_2()
+                                            .child(Input::new(&proxy_user_input).flex_1())
+                                            .child(Input::new(&proxy_password_input).flex_1())
+                                    )
                                 })
                                 .child(
                                     h_flex()
@@ -1521,6 +1585,58 @@ impl Ashell {
                                                         })
                                                     )
                                                 )
+                                                .item(
+                                                    SettingItem::new(
+                                                        t!("cursor_style").to_string(),
+                                                        SettingField::render({
+                                                            let view = view_clone_for_general.clone();
+                                                            move |_, _window, cx| {
+                                                                use crate::session::config::CursorStyle;
+                                                                let current = view.read(cx).cursor_style;
+                                                                Button::new("cursor-style-dropdown")
+                                                                    .small()
+                                                                    .icon(IconName::ChevronsUpDown)
+                                                                    .label(match current {
+                                                                        CursorStyle::Default => t!("cursor_style_default").to_string(),
+                                                                        CursorStyle::Blink => t!("cursor_style_blink").to_string(),
+                                                                        CursorStyle::Beam => t!("cursor_style_beam").to_string(),
+                                                                        CursorStyle::BeamBlink => t!("cursor_style_beam_blink").to_string(),
+                                                                    })
+                                                                    .dropdown_menu_with_anchor(Anchor::BottomRight, {
+                                                                        let view = view.clone();
+                                                                        move |mut menu, window, cx| {
+                                                                            use crate::session::config::CursorStyle;
+                                                                            let current = view.read(cx).cursor_style;
+                                                                            menu = menu.min_w(160.).max_h(px(320.)).scrollable(true);
+                                                                            for style in [
+                                                                                CursorStyle::Default,
+                                                                                CursorStyle::Blink,
+                                                                                CursorStyle::Beam,
+                                                                                CursorStyle::BeamBlink,
+                                                                            ] {
+                                                                                let checked = style == current;
+                                                                                let label = match style {
+                                                                                    CursorStyle::Default => t!("cursor_style_default").to_string(),
+                                                                                    CursorStyle::Blink => t!("cursor_style_blink").to_string(),
+                                                                                    CursorStyle::Beam => t!("cursor_style_beam").to_string(),
+                                                                                    CursorStyle::BeamBlink => t!("cursor_style_beam_blink").to_string(),
+                                                                                };
+                                                                                menu = menu.item(
+                                                                                    PopupMenuItem::new(label)
+                                                                                        .checked(checked)
+                                                                                        .on_click(window.listener_for(&view, move |this, _, _window, cx| {
+                                                                                            this.change_cursor_style(style, cx);
+                                                                                        }))
+                                                                                );
+                                                                            }
+                                                                            menu
+                                                                        }
+                                                                    })
+                                                                    .into_any_element()
+                                                            }
+                                                        })
+                                                    )
+                                                )
                                         )
                                         .group(
                                             SettingGroup::new()
@@ -1542,7 +1658,7 @@ impl Ashell {
                                                                     .into_any_element()
                                                             }
                                                         })
-                                                    ).description(t!("copy_paste_hint", key = if cfg!(target_os = "macos") { "Command" } else { "Ctrl" }).to_string())
+                                                    ).description(t!("copy_paste_hint").to_string())
                                                 )
                                                 .item(
                                                     SettingItem::new(
@@ -1761,6 +1877,119 @@ impl Ashell {
                                                                     .child(Button::new("sync-upload").small().disabled(in_progress).label(t!("sync_upload").to_string()).on_click(window.listener_for(&view, |this, _, _, cx| this.upload_sync_config(cx)))),
                                                             )
                                                             .child(div().text_sm().text_color(cx.theme().muted_foreground).child(status))
+                                                    }
+                                                }))
+                                        )
+                                )
+                                .page(
+                                    SettingPage::new(t!("settings_proxy").to_string())
+                                        .icon(IconName::Network)
+                                        .group(
+                                            SettingGroup::new()
+                                                .title(t!("settings_proxy").to_string())
+                                                .item(
+                                                    SettingItem::new(
+                                                        t!("enable_proxy").to_string(),
+                                                        SettingField::render({
+                                                            let view = view.clone();
+                                                            move |_, window, cx| {
+                                                                Switch::new("use-proxy")
+                                                                    .small()
+                                                                    .checked(view.read(cx).config.use_proxy())
+                                                                    .on_click(window.listener_for(&view, |this, checked, _, cx| {
+                                                                        this.config.set_use_proxy(*checked);
+                                                                        let _ = this.config.save();
+                                                                        cx.notify();
+                                                                    }))
+                                                                    .into_any_element()
+                                                            }
+                                                        })
+                                                    )
+                                                )
+                                                .item(
+                                                    SettingItem::new(
+                                                        t!("read_env_proxy").to_string(),
+                                                        SettingField::render({
+                                                            let view = view.clone();
+                                                            move |_, window, cx| {
+                                                                Switch::new("read-env-proxy")
+                                                                    .small()
+                                                                    .checked(view.read(cx).config.read_env_proxy())
+                                                                    .on_click(window.listener_for(&view, |this, checked, _, cx| {
+                                                                        this.config.set_read_env_proxy(*checked);
+                                                                        let _ = this.config.save();
+                                                                        cx.notify();
+                                                                    }))
+                                                                    .into_any_element()
+                                                            }
+                                                        })
+                                                    ).description(t!("read_env_proxy_desc").to_string())
+                                                )
+                                                .item(SettingItem::render({
+                                                    let view = view.clone();
+                                                    let global_proxy_host_input = view.read(cx).global_proxy_host_input.clone();
+                                                    let global_proxy_port_input = view.read(cx).global_proxy_port_input.clone();
+                                                    let global_proxy_user_input = view.read(cx).global_proxy_user_input.clone();
+                                                    let global_proxy_password_input = view.read(cx).global_proxy_password_input.clone();
+                                                    move |_, window, cx| {
+                                                        let proxy_type = view.read(cx).global_proxy_type.clone();
+                                                        v_flex()
+                                                            .w_full()
+                                                            .gap_3()
+                                                            .child(div().text_sm().font_weight(FontWeight::BOLD).child(t!("global_proxy_settings").to_string()))
+                                                            .child(
+                                                                h_flex()
+                                                                    .gap_2()
+                                                                    .child(
+                                                                        Button::new("global-proxy-type-socks5")
+                                                                            .small()
+                                                                            .label("SOCKS5")
+                                                                            .when(proxy_type == "socks5", |b| b.primary())
+                                                                            .on_click(window.listener_for(&view, |this, _, _, cx| {
+                                                                                this.global_proxy_type = "socks5".to_string();
+                                                                                cx.notify();
+                                                                            }))
+                                                                    )
+                                                                    .child(
+                                                                        Button::new("global-proxy-type-http")
+                                                                            .small()
+                                                                            .label("HTTP")
+                                                                            .when(proxy_type == "http", |b| b.primary())
+                                                                            .on_click(window.listener_for(&view, |this, _, _, cx| {
+                                                                                this.global_proxy_type = "http".to_string();
+                                                                                cx.notify();
+                                                                            }))
+                                                                    )
+                                                            )
+                                                            .child(v_flex().gap_1().child(div().text_sm().child(t!("global_proxy_host").to_string())).child(Input::new(&global_proxy_host_input).w_full()))
+                                                            .child(v_flex().gap_1().child(div().text_sm().child(t!("global_proxy_port").to_string())).child(Input::new(&global_proxy_port_input).w_full()))
+                                                            .child(v_flex().gap_1().child(div().text_sm().child(t!("global_proxy_user").to_string())).child(Input::new(&global_proxy_user_input).w_full()))
+                                                            .child(v_flex().gap_1().child(div().text_sm().child(t!("global_proxy_password").to_string())).child(Input::new(&global_proxy_password_input).w_full()))
+                                                            .child(
+                                                                Button::new("save-global-proxy")
+                                                                    .small()
+                                                                    .primary()
+                                                                    .label(t!("save_proxy").to_string())
+                                                                    .on_click(window.listener_for(&view, |this, _, _, cx| {
+                                                                        let host = this.global_proxy_host_input.read(cx).value().trim().to_string();
+                                                                        let port_str = this.global_proxy_port_input.read(cx).value();
+                                                                        let port = port_str.trim().parse::<u16>().ok();
+                                                                        let user = this.global_proxy_user_input.read(cx).value().trim().to_string();
+                                                                        let password = this.global_proxy_password_input.read(cx).value().to_string();
+                                                                        
+                                                                        if host.is_empty() || port.is_none() {
+                                                                            return;
+                                                                        }
+                                                                        
+                                                                        this.config.set_global_proxy_type(this.global_proxy_type.clone());
+                                                                        this.config.set_global_proxy_host(host);
+                                                                        this.config.set_global_proxy_port(port);
+                                                                        this.config.set_global_proxy_user(user);
+                                                                        this.config.set_global_proxy_password(password);
+                                                                        let _ = this.config.save();
+                                                                        cx.notify();
+                                                                    }))
+                                                            )
                                                     }
                                                 }))
                                         )

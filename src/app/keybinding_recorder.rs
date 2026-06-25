@@ -29,7 +29,9 @@ gpui::actions!(
         SplitPaneRight,
         SplitPaneUp,
         SplitPaneDown,
-        ClosePane
+        ClosePane,
+        Copy,
+        Paste
     ]
 );
 
@@ -122,6 +124,16 @@ pub(crate) const WORKSPACE_ACTIONS: &[WorkspaceAction] = &[
         id: "ClosePane",
         label_key: "settings_close_pane",
         default_suffix: "w",
+    },
+    WorkspaceAction {
+        id: "Copy",
+        label_key: "settings_copy",
+        default_suffix: if cfg!(target_os = "macos") { "c" } else { "shift-c" },
+    },
+    WorkspaceAction {
+        id: "Paste",
+        label_key: "settings_paste",
+        default_suffix: if cfg!(target_os = "macos") { "v" } else { "shift-v" },
     },
 ];
 
@@ -224,6 +236,8 @@ pub(crate) fn unbind_all_workspace_keys(cx: &mut App, config: &ConfigStore) {
     unbind_action!("SplitPaneUp", crate::SplitPaneUp);
     unbind_action!("SplitPaneDown", crate::SplitPaneDown);
     unbind_action!("ClosePane", crate::ClosePane);
+    unbind_action!("Copy", crate::Copy);
+    unbind_action!("Paste", crate::Paste);
 
     cx.bind_keys(bindings);
 }
@@ -280,6 +294,8 @@ fn bind_workspace_actions(cx: &mut App, config: &ConfigStore) {
     bind_action!("SplitPaneUp", crate::SplitPaneUp);
     bind_action!("SplitPaneDown", crate::SplitPaneDown);
     bind_action!("ClosePane", crate::ClosePane);
+    bind_action!("Copy", crate::Copy);
+    bind_action!("Paste", crate::Paste);
 
     cx.bind_keys(bindings);
 }
@@ -289,7 +305,7 @@ impl KeybindingsPage {
         let groups = [
             (
                 "settings_group_keybind_general",
-                vec!["OpenSettings", "OpenSession", "OpenTransfers", "NewSsh", "OpenSearch"],
+                vec!["OpenSettings", "OpenSession", "OpenTransfers", "NewSsh", "OpenSearch", "Copy", "Paste"],
             ),
             (
                 "settings_group_keybind_zoom",
