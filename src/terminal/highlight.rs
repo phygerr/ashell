@@ -155,22 +155,14 @@ fn highlight_colors() -> HighlightColors {
     }
 }
 
-fn is_boundary(c: char) -> bool {
-    !c.is_ascii_alphanumeric() && c != '_'
-}
-
-/// Match keyword at `pos` in `text` as a whole word.
-fn matches_keyword(text: &str, pos: usize, keyword: &str) -> bool {
-    let abs = pos;
-    let before_ok = abs == 0
-        || is_boundary(text.as_bytes()[abs - 1] as char);
-    let after_pos = abs + keyword.len();
-    let after_ok = after_pos >= text.len()
-        || is_boundary(text.as_bytes()[after_pos] as char);
-    before_ok && after_ok
+/// Case-insensitive ASCII comparison.
+fn eq_ignore_ascii_case(a: &str, b: &str) -> bool {
+    a.len() == b.len() && a.bytes().zip(b.bytes()).all(|(x, y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
 }
 
 /// Highlight all occurrences of keyword list in `text`, writing to `map`.
+/// Case-insensitive, matches inside larger words (e.g. "my_ERROR" highlights "ERROR").
+/// Each keyword only matches once per position (no overlapping highlights).
 fn highlight_keywords(
     map: &mut HashMap<(i32, i32), Hsla>,
     text: &str,
@@ -180,17 +172,84 @@ fn highlight_keywords(
     color: Hsla,
 ) {
     for &kw in keywords {
+        let kw_lower: Vec<u8> = kw.bytes().map(|b| b.to_ascii_lowercase()).collect();
+        let text_bytes = text.as_bytes();
+        let text_lower: Vec<u8> = text_bytes.iter().map(|b| b.to_ascii_lowercase()).collect();
         let mut start = 0;
-        while let Some(pos) = text[start..].find(kw) {
-            let abs = start + pos;
-            if matches_keyword(text, abs, kw) {
+        while start + kw_lower.len() <= text_lower.len() {
+            if text_lower[start..].starts_with(&kw_lower) {
+                let abs = start;
                 let start_col = byte_to_col[abs];
-                let end_col = byte_to_col[(abs + kw.len()).min(byte_to_col.len() - 1)];
+                let end_col = byte_to_col[(abs + kw.len() - 1).min(byte_to_col.len() - 1)];
                 for c in start_col..=end_col {
                     map.entry((row_i32, c)).or_insert(color);
                 }
+                start = abs + kw.len();
+            } else {
+                start += 1;
             }
-            start = abs + kw.len();
+        }
+    }
+}
+
+/// Highlight HTTP status codes (200, 301, 404, 500, etc.)
+/// Only matches specific common HTTP codes, not all 3-digit numbers.
+fn highlight_http_codes(
+    map: &mut HashMap<(i32, i32), Hsla>,
+    text: &str,
+    byte_to_col: &[i32],
+    row_i32: i32,
+    colors: &HighlightColors,
+) {
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+
+    // Specific HTTP codes to highlight
+    const HTTP_CODES: &[(u16, bool)] = &[
+        // 2xx
+        (200, true), (201, true), (202, true), (204, true), (206, true),
+        // 3xx
+        (301, true), (302, true), (304, true), (307, true), (308, true),
+        // 4xx
+        (400, true), (401, true), (403, true), (404, true), (405, true),
+        (408, true), (409, true), (410, true), (422, true), (429, true),
+        // 5xx
+        (500, true), (502, true), (503, true), (504, true),
+    ];
+
+    for i in 0..len.saturating_sub(2) {
+        if !bytes[i].is_ascii_digit() || !bytes[i + 1].is_ascii_digit() || !bytes[i + 2].is_ascii_digit() {
+            continue;
+        }
+
+        let code: u16 = ((bytes[i] - b'0') as u16) * 100
+            + ((bytes[i + 1] - b'0') as u16) * 10
+            + ((bytes[i + 2] - b'0') as u16);
+
+        // Only match specific codes
+        if !HTTP_CODES.iter().any(|&(c, _)| c == code) {
+            continue;
+        }
+
+        // Must be at a boundary (not part of a longer number)
+        let before_ok = i == 0 || !bytes[i - 1].is_ascii_digit();
+        let after_ok = i + 3 >= len || !bytes[i + 3].is_ascii_digit();
+        if !before_ok || !after_ok {
+            continue;
+        }
+
+        let color = match code {
+            200..=299 => colors.http_2xx,
+            300..=399 => colors.http_3xx,
+            400..=499 => colors.http_4xx,
+            500..=599 => colors.http_5xx,
+            _ => continue,
+        };
+
+        let start_col = byte_to_col[i];
+        let end_col = byte_to_col[(i + 2).min(byte_to_col.len() - 1)];
+        for c in start_col..=end_col {
+            map.entry((row_i32, c)).or_insert(color);
         }
     }
 }
@@ -201,7 +260,6 @@ pub fn highlight_cells(
 ) -> HashMap<(i32, i32), Hsla> {
     let colors = highlight_colors();
 
-    // Pre-allocate the outer vector to the size of rows.
     let mut row_chars: Vec<Vec<(i32, char)>> = vec![Vec::with_capacity(128); rows];
     for rc in cells {
         if rc.row < 0 || (rc.row as usize) >= rows {
@@ -215,7 +273,6 @@ pub fn highlight_cells(
 
     let mut map = HashMap::new();
 
-    // Reusable buffers to avoid allocation inside the loop
     let mut chars_buf = String::with_capacity(128);
     let mut byte_to_col: Vec<i32> = Vec::with_capacity(128);
 
@@ -244,19 +301,24 @@ pub fn highlight_cells(
         );
 
         // ── 2. Error keywords ──────────────────────────────────
-        highlight_keywords(&mut map, text, &byte_to_col, row_i32,&["ERROR", "ERR"], colors.error);
+        highlight_keywords(&mut map, text, &byte_to_col, row_i32,
+            &["ERROR", "ERR"], colors.error);
 
         // ── 3. Alert ───────────────────────────────────────────
-        highlight_keywords(&mut map, text, &byte_to_col, row_i32,&["ALERT"], colors.alert);
+        highlight_keywords(&mut map, text, &byte_to_col, row_i32,
+            &["ALERT"], colors.alert);
 
         // ── 4. Warning keywords ────────────────────────────────
-        highlight_keywords(&mut map, text, &byte_to_col, row_i32,&["WARNING", "WARN"], colors.warning);
+        highlight_keywords(&mut map, text, &byte_to_col, row_i32,
+            &["WARNING", "WARN"], colors.warning);
 
         // ── 5. Info keywords ───────────────────────────────────
-        highlight_keywords(&mut map, text, &byte_to_col, row_i32,&["INFO", "INFORMATION", "NOTICE"], colors.info);
+        highlight_keywords(&mut map, text, &byte_to_col, row_i32,
+            &["INFO", "INFORMATION", "NOTICE"], colors.info);
 
         // ── 6. Debug keywords ──────────────────────────────────
-        highlight_keywords(&mut map, text, &byte_to_col, row_i32,&["DEBUG", "DBG", "TRACE"], colors.debug);
+        highlight_keywords(&mut map, text, &byte_to_col, row_i32,
+            &["DEBUG", "DBG", "TRACE"], colors.debug);
 
         // ── 7. Success status ──────────────────────────────────
         highlight_keywords(&mut map, text, &byte_to_col, row_i32,
@@ -290,7 +352,8 @@ pub fn highlight_cells(
         );
 
         // ── 12. Skipped ────────────────────────────────────────
-        highlight_keywords(&mut map, text, &byte_to_col, row_i32,&["SKIPPED", "SKIP", "SKIPPING"], colors.skipped);
+        highlight_keywords(&mut map, text, &byte_to_col, row_i32,
+            &["SKIPPED", "SKIP", "SKIPPING"], colors.skipped);
 
         // ── 13. Network UP ─────────────────────────────────────
         highlight_keywords(&mut map, text, &byte_to_col, row_i32,
@@ -374,7 +437,7 @@ pub fn highlight_cells(
 
         // ── 25. Resources: Memory ──────────────────────────────
         highlight_keywords(&mut map, text, &byte_to_col, row_i32,
-            &["MEMORY", "RAM", "HEAP", "STACK", "SWAP", "MEM", "OOM"],
+            &["MEMORY", "RAM", "HEAP", "STACK", "SWAP", "MEM"],
             colors.memory,
         );
 
@@ -411,8 +474,9 @@ pub fn highlight_cells(
 
         // ── 31. IP addresses ───────────────────────────────────
         for m in find_ip_addresses(text) {
+            let ip_len = find_ip_len(&text[m..]);
             let start_col = byte_to_col[m];
-            let end_col = byte_to_col[(m + find_ip_len(&text[m..])).min(byte_to_col.len() - 1)];
+            let end_col = byte_to_col[(m + ip_len - 1).min(byte_to_col.len() - 1)];
             for c in start_col..=end_col {
                 map.entry((row_i32, c)).or_insert(colors.network);
             }
@@ -422,7 +486,7 @@ pub fn highlight_cells(
         for m in find_urls(text) {
             let url_len = find_url_len(&text[m..]);
             let start_col = byte_to_col[m];
-            let end_col = byte_to_col[(m + url_len).min(byte_to_col.len() - 1)];
+            let end_col = byte_to_col[(m + url_len - 1).min(byte_to_col.len() - 1)];
             for c in start_col..=end_col {
                 map.entry((row_i32, c)).or_insert(colors.url);
             }
@@ -432,7 +496,7 @@ pub fn highlight_cells(
         for m in find_ports(text) {
             let port_len = find_port_len(&text[m..]);
             let start_col = byte_to_col[m];
-            let end_col = byte_to_col[(m + port_len).min(byte_to_col.len() - 1)];
+            let end_col = byte_to_col[(m + port_len - 1).min(byte_to_col.len() - 1)];
             for c in start_col..=end_col {
                 map.entry((row_i32, c)).or_insert(colors.port);
             }
@@ -440,54 +504,6 @@ pub fn highlight_cells(
     }
 
     map
-}
-
-/// Highlight HTTP status codes (200, 301, 404, 500, etc.)
-fn highlight_http_codes(
-    map: &mut HashMap<(i32, i32), Hsla>,
-    text: &str,
-    byte_to_col: &[i32],
-    row_i32: i32,
-    colors: &HighlightColors,
-) {
-    let bytes = text.as_bytes();
-    let len = bytes.len();
-
-    for i in 0..len.saturating_sub(2) {
-        // Look for 3-digit numbers that are HTTP status codes
-        if bytes[i].is_ascii_digit()
-            && i + 2 < len
-            && bytes[i + 1].is_ascii_digit()
-            && bytes[i + 2].is_ascii_digit()
-        {
-            // Must be at a boundary
-            let before_ok = i == 0 || is_boundary(bytes[i - 1] as char);
-            let after_ok = i + 3 >= len || is_boundary(bytes[i + 3] as char);
-            if !before_ok || !after_ok {
-                continue;
-            }
-
-            let code: u16 = ((bytes[i] - b'0') as u16) * 100
-                + ((bytes[i + 1] - b'0') as u16) * 10
-                + ((bytes[i + 2] - b'0') as u16);
-
-            let color = match code {
-                200..=299 => Some(colors.http_2xx),
-                300..=399 => Some(colors.http_3xx),
-                400..=499 => Some(colors.http_4xx),
-                500..=599 => Some(colors.http_5xx),
-                _ => None,
-            };
-
-            if let Some(color) = color {
-                let start_col = byte_to_col[i];
-                let end_col = byte_to_col[(i + 3).min(byte_to_col.len() - 1)];
-                for c in start_col..=end_col {
-                    map.entry((row_i32, c)).or_insert(color);
-                }
-            }
-        }
-    }
 }
 
 fn find_ip_len(text: &str) -> usize {
@@ -514,7 +530,7 @@ fn find_ip_len(text: &str) -> usize {
                 }
                 digits = 0;
             }
-            _ => break,
+            _ => break, // Stop at first non-digit/non-dot (including '/')
         }
         len += 1;
     }
@@ -538,7 +554,6 @@ fn find_ip_addresses(text: &str) -> Vec<usize> {
             let remaining = &text[i..];
             let ip_len = find_ip_len(remaining);
             if ip_len > 0 {
-                // Validate each octet is 0-255.
                 let ip_str = &remaining[..ip_len];
                 let valid = ip_str
                     .split('.')
@@ -550,6 +565,10 @@ fn find_ip_addresses(text: &str) -> Vec<usize> {
         }
     }
     positions
+}
+
+fn is_boundary(c: char) -> bool {
+    !c.is_ascii_alphanumeric() && c != '_'
 }
 
 fn find_urls(text: &str) -> Vec<usize> {

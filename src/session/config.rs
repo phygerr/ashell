@@ -304,7 +304,7 @@ impl Default for ConfigFile {
             terminal_font_size: default_terminal_font_size(),
             ui_font_size: default_ui_font_size(),
             right_click_copy_paste: false,
-            keyword_highlight: true,
+            keyword_highlight: false,
             ui_font_family: default_ui_font_family(),
             terminal_font_family: default_terminal_font_family(),
             title_bar_style: TitleBarStyle::default(),
