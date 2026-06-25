@@ -902,11 +902,6 @@ impl Ashell {
                         tab.status = reason.clone();
                         tab.disconnected_reason = Some(reason.clone());
                     }
-                    let is_sftp = self.tab_groups.iter().any(|g| g.id == tab_id);
-                    if is_sftp {
-                        tab_title = self.tab_groups.iter().find(|g| g.id == tab_id).map(|g| g.title.clone());
-                        session_label = Some("sftp".to_string());
-                    }
                     if self.system_tab_id.as_deref() == Some(tab_id.as_str()) {
                         self.system_status = Some(reason.clone().into());
                     }
