@@ -481,6 +481,20 @@ impl Ashell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Ctrl+scroll → zoom terminal font size
+        if event.modifiers.control {
+            let delta = match event.delta {
+                ScrollDelta::Lines(point) => point.y as f32,
+                ScrollDelta::Pixels(point) => point.y.as_f32() / 100.0,
+            };
+            if delta != 0.0 {
+                self.change_terminal_font_size(delta.signum() * 0.5, cx);
+            }
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+
         let Some(active_id) = self.active_tab.clone() else {
             return;
         };
