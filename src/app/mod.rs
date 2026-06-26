@@ -298,8 +298,6 @@ pub(crate) struct Ashell {
     pub(crate) last_system_sample: Instant,
     pub(crate) last_theme_sync: Instant,
 
-    pub(crate) quick_input_text: Entity<InputState>,
-    pub(crate) editing_quick_input: Option<usize>,
     pub(crate) search_input: Entity<InputState>,
     pub(crate) search_active: bool,
     pub(crate) search_query: String,
@@ -386,7 +384,6 @@ impl Ashell {
         let sftp_path_input = cx.new(|cx| InputState::new(window, cx).default_value("/"));
         let sftp_new_folder_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("new_folder").to_string()));
-        let quick_input_text = cx.new(|cx| InputState::new(window, cx));
         let search_input = cx.new(|cx| {
             InputState::new(window, cx).placeholder(t!("search").to_string())
         });
@@ -654,8 +651,6 @@ impl Ashell {
             last_system_sample: Instant::now(),
             last_theme_sync: Instant::now(),
 
-            quick_input_text,
-            editing_quick_input: None,
             search_input,
             search_active: false,
             search_query: String::new(),

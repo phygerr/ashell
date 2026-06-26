@@ -5,7 +5,6 @@ use gpui_component::{
     IconName, Sizable,
     button::{Button, ButtonVariants},
     h_flex,
-    input::{Input, InputState},
     kbd::Kbd,
     setting::{SettingField, SettingGroup, SettingItem},
 };
@@ -414,7 +413,6 @@ impl KeybindingsPage {
 
         // ── Quick Input group ──────────────────────────────────────
         let quick_inputs = view.read(cx).config.quick_inputs().to_vec();
-        let quick_input_text_entity = view.read(cx).quick_input_text.clone();
         let mut qi_group = SettingGroup::new().title(t!("settings_group_quick_input").to_string());
 
         for (idx, qi) in quick_inputs.iter().enumerate() {
@@ -427,19 +425,16 @@ impl KeybindingsPage {
                 format_keystroke(&qi.keystroke)
             };
 
-            let qi_text = qi.text.clone();
-            let display_text = if qi.text.is_empty() {
+            let qi_text = if qi.text.is_empty() {
                 t!("quick_input_empty").to_string()
             } else {
                 qi.text.clone()
             };
 
             let item = SettingItem::new(
-                display_text,
+                qi_text.clone(),
                 SettingField::render({
                     let view = view.clone();
-                    let qi_text = qi_text.clone();
-                    let quick_input_text_entity = quick_input_text_entity.clone();
                     move |_, _window, _cx| {
                         let view2 = view.clone();
                         h_flex()
@@ -463,22 +458,11 @@ impl KeybindingsPage {
                                     }),
                             )
                             .child(
-                                Input::new(&quick_input_text_entity)
+                                div()
                                     .flex_1()
-                                    .on_focus({
-                                        let view = view.clone();
-                                        let qi_text = qi_text.clone();
-                                        let quick_input_text_entity = quick_input_text_entity.clone();
-                                        move |_event, window, cx| {
-                                            view.update(cx, |this, cx| {
-                                                this.editing_quick_input = Some(idx);
-                                                quick_input_text_entity.update(cx, |state, cx| {
-                                                    state.set_value(&qi_text, window, cx);
-                                                });
-                                                cx.notify();
-                                            });
-                                        }
-                                    }),
+                                    .text_sm()
+                                    .text_color(_cx.theme().muted_foreground)
+                                    .child(qi_text.clone()),
                             )
                             .child(
                                 Button::new(gpui::SharedString::from(format!("qi-del-{idx}")))

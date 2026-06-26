@@ -561,12 +561,6 @@ impl ConfigStore {
         }
     }
 
-    pub fn update_quick_input_text(&mut self, idx: usize, text: &str) {
-        if let Some(qi) = self.cache.quick_inputs.get_mut(idx) {
-            qi.text = text.to_string();
-        }
-    }
-
     pub fn add_quick_input(&mut self, keystroke: String, text: String) {
         self.cache.quick_inputs.push(QuickInput { keystroke, text });
     }
