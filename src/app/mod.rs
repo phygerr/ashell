@@ -896,6 +896,7 @@ impl Ashell {
                         });
                     if is_stale {
                         continue;
+<<<<<<< HEAD
                     }
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
                         tab.connected = false;
@@ -905,6 +906,24 @@ impl Ashell {
                     if self.system_tab_id.as_deref() == Some(tab_id.as_str()) {
                         self.system_status = Some(reason.clone().into());
                     }
+=======
+                    }
+                    let is_graceful_exit =
+                        reason == "local shell closed" || reason == "ssh session closed";
+                    if is_graceful_exit {
+                        self.handle_tab_close(tab_id.clone());
+                        self.status = reason.into();
+                        continue;
+                    }
+                    if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) {
+                        tab.connected = false;
+                        tab.status = reason.clone();
+                        tab.disconnected_reason = Some(reason.clone());
+                    }
+                    if self.system_tab_id.as_deref() == Some(tab_id.as_str()) {
+                        self.system_status = Some(reason.clone().into());
+                    }
+>>>>>>> 3770826764f509e3ffdb56267d9014eeaf22bb92
                     self.status = reason.into();
                 }
                 BackendEvent::TransferProgress {
