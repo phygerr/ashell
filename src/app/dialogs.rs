@@ -1142,6 +1142,22 @@ impl Ashell {
 
         let view = cx.entity();
 
+        // Subscribe to quick input text changes
+        cx.subscribe_in(&self.quick_input_text, window, {
+            let view = view.clone();
+            move |this, _input: &Entity<InputState>, event: &gpui_component::input::InputEvent, _window, cx| {
+                if let gpui_component::input::InputEvent::Change = event {
+                    if let Some(idx) = this.editing_quick_input {
+                        let text = this.quick_input_text.read(cx).text().to_string();
+                        this.config.update_quick_input_text(idx, &text);
+                        let _ = this.config.save();
+                        cx.notify();
+                    }
+                }
+            }
+        })
+        .detach();
+
         // Unbind all workspace keys so they don't interfere with keybinding recording
         crate::app::keybinding_recorder::unbind_all_workspace_keys(cx, &self.config);
         self.keybinds_suspended = true;
@@ -1236,7 +1252,13 @@ impl Ashell {
 
                                             this.recording_action = None;
                                             this.keybind_error = None;
-                                            this.config.set_key_binding(&action, &new_key);
+                                            if let Some(idx) = action.strip_prefix("quick_input_") {
+                                                if let Ok(idx) = idx.parse::<usize>() {
+                                                    this.config.update_quick_input_keystroke(idx, &new_key);
+                                                }
+                                            } else {
+                                                this.config.set_key_binding(&action, &new_key);
+                                            }
                                             if let Err(err) = this.config.save() {
                                                 tracing::error!("failed to save key binding: {err:#}");
                                             }

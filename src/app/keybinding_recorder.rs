@@ -2,8 +2,10 @@ use gpui::{
     Action as _, App, Entity, IntoElement, KeyBinding, KeyDownEvent, Keystroke, Unbind, prelude::*,
 };
 use gpui_component::{
-    Sizable,
+    IconName, Sizable,
     button::{Button, ButtonVariants},
+    h_flex,
+    input::{Input, InputState},
     kbd::Kbd,
     setting::{SettingField, SettingGroup, SettingItem},
 };
@@ -409,6 +411,122 @@ impl KeybindingsPage {
 
             result.push(group);
         }
+
+        // ── Quick Input group ──────────────────────────────────────
+        let quick_inputs = view.read(cx).config.quick_inputs().to_vec();
+        let quick_input_text_entity = view.read(cx).quick_input_text.clone();
+        let mut qi_group = SettingGroup::new().title(t!("settings_group_quick_input").to_string());
+
+        for (idx, qi) in quick_inputs.iter().enumerate() {
+            let recording = view.read(cx).recording_action.as_deref() == Some(&format!("quick_input_{idx}"));
+            let btn_label = if recording {
+                t!("press_new_key").to_string()
+            } else if qi.keystroke.is_empty() {
+                t!("none").to_string()
+            } else {
+                format_keystroke(&qi.keystroke)
+            };
+
+            let qi_text = qi.text.clone();
+            let display_text = if qi.text.is_empty() {
+                t!("quick_input_empty").to_string()
+            } else {
+                qi.text.clone()
+            };
+
+            let item = SettingItem::new(
+                display_text,
+                SettingField::render({
+                    let view = view.clone();
+                    let qi_text = qi_text.clone();
+                    let quick_input_text_entity = quick_input_text_entity.clone();
+                    move |_, _window, _cx| {
+                        let view2 = view.clone();
+                        h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(
+                                Button::new(gpui::SharedString::from(format!("qi-key-{idx}")))
+                                    .label(btn_label.clone())
+                                    .small()
+                                    .when(recording, |this| this.primary())
+                                    .on_click({
+                                        let view = view.clone();
+                                        move |_event, window, cx| {
+                                            view.update(cx, |this, cx| {
+                                                this.keybind_error = None;
+                                                this.recording_action = Some(format!("quick_input_{idx}"));
+                                                this.focus_handle.focus(window, cx);
+                                                cx.notify();
+                                            });
+                                        }
+                                    }),
+                            )
+                            .child(
+                                Input::new(&quick_input_text_entity)
+                                    .flex_1()
+                                    .on_focus({
+                                        let view = view.clone();
+                                        let qi_text = qi_text.clone();
+                                        let quick_input_text_entity = quick_input_text_entity.clone();
+                                        move |_event, window, cx| {
+                                            view.update(cx, |this, cx| {
+                                                this.editing_quick_input = Some(idx);
+                                                quick_input_text_entity.update(cx, |state, cx| {
+                                                    state.set_value(&qi_text, window, cx);
+                                                });
+                                                cx.notify();
+                                            });
+                                        }
+                                    }),
+                            )
+                            .child(
+                                Button::new(gpui::SharedString::from(format!("qi-del-{idx}")))
+                                    .small()
+                                    .icon(IconName::Close)
+                                    .on_click(move |_, _, cx| {
+                                        view2.update(cx, |this, cx| {
+                                            this.config.remove_quick_input(idx);
+                                            let _ = this.config.save();
+                                            cx.notify();
+                                        });
+                                    }),
+                            )
+                            .into_any_element()
+                    }
+                }),
+            );
+
+            qi_group = qi_group.item(item);
+        }
+
+        // Add button
+        qi_group = qi_group.item(
+            SettingItem::new(
+                t!("quick_input_add").to_string(),
+                SettingField::render({
+                    let view = view.clone();
+                    move |_, _window, _cx| {
+                        Button::new("qi-add")
+                            .small()
+                            .icon(IconName::Plus)
+                            .on_click({
+                                let view = view.clone();
+                                move |_, _, cx| {
+                                    view.update(cx, |this, cx| {
+                                        this.config.add_quick_input(String::new(), String::new());
+                                        let _ = this.config.save();
+                                        cx.notify();
+                                    });
+                                }
+                            })
+                            .into_any_element()
+                    }
+                }),
+            ),
+        );
+
+        result.push(qi_group);
 
         result
     }

@@ -135,6 +135,22 @@ impl Ashell {
             }
         }
 
+        // Quick input: check if the keystroke matches a configured quick input
+        if let Some(normalized) = crate::app::keybinding_recorder::normalize_recorded_keystroke(event) {
+            if let Some(qi) = self.config.quick_inputs().iter().find(|qi| qi.keystroke == normalized) {
+                let active_id = self.active_tab.clone();
+                if let Some(active_id) = active_id {
+                    let is_connected = self.tabs.iter().find(|t| t.id == active_id).is_some_and(|tab| tab.connected);
+                    if is_connected {
+                        let mut bytes = qi.text.as_bytes().to_vec();
+                        bytes.push(b'\r');
+                        self.send_terminal_input(bytes, window, cx);
+                        return;
+                    }
+                }
+            }
+        }
+
         if event.prefer_character_input {
             if let Some(text) = event.keystroke.key_char.as_deref() {
                 if !text.is_empty()

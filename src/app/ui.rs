@@ -200,7 +200,7 @@ impl Ashell {
                     Button::new("sftp-refresh")
                         .ghost()
                         .small()
-                        .icon(IconName::ArrowRight)
+                        .icon(IconName::Redo2)
                         .label(t!("refresh").to_string())
                         .on_click(cx.listener(|this, _, _, cx| this.refresh_sftp(cx))),
                 )

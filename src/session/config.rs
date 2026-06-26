@@ -163,6 +163,12 @@ pub enum CursorStyle {
     BeamBlink,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct QuickInput {
+    pub keystroke: String,
+    pub text: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigFile {
     #[serde(default = "default_follow_system_theme")]
@@ -211,6 +217,8 @@ pub struct ConfigFile {
     pub sftp_panel_minimized: bool,
     #[serde(default)]
     pub key_bindings: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub quick_inputs: Vec<QuickInput>,
     #[serde(default)]
     pub sync_endpoint: String,
     #[serde(default)]
@@ -319,6 +327,7 @@ impl Default for ConfigFile {
             sidebar_collapsed: false,
             sftp_panel_minimized: false,
             key_bindings: std::collections::HashMap::new(),
+            quick_inputs: Vec::new(),
             sync_endpoint: String::new(),
             sync_username: String::new(),
             sync_etag: None,
@@ -536,6 +545,36 @@ impl ConfigStore {
         self.cache
             .key_bindings
             .insert(action_name.to_string(), keystroke.to_string());
+    }
+
+    pub fn quick_inputs(&self) -> &[QuickInput] {
+        &self.cache.quick_inputs
+    }
+
+    pub fn set_quick_inputs(&mut self, inputs: Vec<QuickInput>) {
+        self.cache.quick_inputs = inputs;
+    }
+
+    pub fn update_quick_input_keystroke(&mut self, idx: usize, keystroke: &str) {
+        if let Some(qi) = self.cache.quick_inputs.get_mut(idx) {
+            qi.keystroke = keystroke.to_string();
+        }
+    }
+
+    pub fn update_quick_input_text(&mut self, idx: usize, text: &str) {
+        if let Some(qi) = self.cache.quick_inputs.get_mut(idx) {
+            qi.text = text.to_string();
+        }
+    }
+
+    pub fn add_quick_input(&mut self, keystroke: String, text: String) {
+        self.cache.quick_inputs.push(QuickInput { keystroke, text });
+    }
+
+    pub fn remove_quick_input(&mut self, idx: usize) {
+        if idx < self.cache.quick_inputs.len() {
+            self.cache.quick_inputs.remove(idx);
+        }
     }
 
     pub fn monitoring_position(&self) -> &str {
