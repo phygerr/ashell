@@ -1,8 +1,9 @@
 use gpui::{
-    Action as _, App, Entity, IntoElement, KeyBinding, KeyDownEvent, Keystroke, Unbind, prelude::*,
+    Action as _, App, Entity, IntoElement, KeyBinding, KeyDownEvent, Keystroke, Unbind, div,
+    prelude::*,
 };
 use gpui_component::{
-    IconName, Sizable,
+    ActiveTheme as _, IconName, Sizable,
     button::{Button, ButtonVariants},
     h_flex,
     kbd::Kbd,
@@ -435,7 +436,7 @@ impl KeybindingsPage {
                 qi_text.clone(),
                 SettingField::render({
                     let view = view.clone();
-                    move |_, _window, _cx| {
+                    move |_, _window, cx| {
                         let view2 = view.clone();
                         h_flex()
                             .gap_2()
@@ -461,7 +462,7 @@ impl KeybindingsPage {
                                 div()
                                     .flex_1()
                                     .text_sm()
-                                    .text_color(_cx.theme().muted_foreground)
+                                    .text_color(cx.theme().muted_foreground)
                                     .child(qi_text.clone()),
                             )
                             .child(
