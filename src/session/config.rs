@@ -41,6 +41,8 @@ pub struct Session {
     pub proxy_user: String,
     #[serde(default)]
     pub proxy_password: String,
+    #[serde(default)]
+    pub group_id: String, // references SessionGroup.id, empty = default group
 }
 
 impl Session {
@@ -63,6 +65,7 @@ impl Session {
             proxy_port: None,
             proxy_user: String::new(),
             proxy_password: String::new(),
+            group_id: String::new(),
         }
     }
 
@@ -92,6 +95,7 @@ impl Session {
             proxy_port: None,
             proxy_user: String::new(),
             proxy_password: String::new(),
+            group_id: String::new(),
         }
     }
 
@@ -118,8 +122,18 @@ impl Session {
             proxy_port: None,
             proxy_user: String::new(),
             proxy_password: String::new(),
+            group_id: String::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionGroup {
+    pub id: String,
+    pub name: String,
+    pub color: String,     // hex color like "#E06060"
+    #[serde(default)]
+    pub collapsed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,6 +213,8 @@ pub struct ConfigFile {
     pub cursor_style: CursorStyle,
     #[serde(default)]
     pub sessions: Vec<Session>,
+    #[serde(default)]
+    pub session_groups: Vec<SessionGroup>,
     #[serde(default)]
     pub window_bounds: Option<SavedWindowBounds>,
     #[serde(default)]
@@ -318,6 +334,7 @@ impl Default for ConfigFile {
             title_bar_style: TitleBarStyle::default(),
             cursor_style: CursorStyle::default(),
             sessions: Vec::new(),
+            session_groups: Vec::new(),
             window_bounds: None,
             workspace_panels: None,
             body_panels: None,
@@ -430,6 +447,44 @@ impl ConfigStore {
 
     pub fn sessions(&self) -> &[Session] {
         &self.cache.sessions
+    }
+
+    pub fn session_groups(&self) -> &[SessionGroup] {
+        &self.cache.session_groups
+    }
+
+    pub fn add_session_group(&mut self, name: String, color: String) -> String {
+        let id = Uuid::new_v4().to_string();
+        self.cache.session_groups.push(SessionGroup {
+            id: id.clone(),
+            name,
+            color,
+            collapsed: false,
+        });
+        id
+    }
+
+    pub fn update_session_group(&mut self, id: &str, name: String, color: String) {
+        if let Some(group) = self.cache.session_groups.iter_mut().find(|g| g.id == id) {
+            group.name = name;
+            group.color = color;
+        }
+    }
+
+    pub fn remove_session_group(&mut self, id: &str) {
+        // Move sessions in this group to default (empty group_id)
+        for session in &mut self.cache.sessions {
+            if session.group_id == id {
+                session.group_id = String::new();
+            }
+        }
+        self.cache.session_groups.retain(|g| g.id != id);
+    }
+
+    pub fn toggle_session_group(&mut self, id: &str) {
+        if let Some(group) = self.cache.session_groups.iter_mut().find(|g| g.id == id) {
+            group.collapsed = !group.collapsed;
+        }
     }
 
     pub fn replace_sessions(&mut self, sessions: Vec<Session>) {
@@ -551,13 +606,15 @@ impl ConfigStore {
         &self.cache.quick_inputs
     }
 
-    pub fn set_quick_inputs(&mut self, inputs: Vec<QuickInput>) {
-        self.cache.quick_inputs = inputs;
-    }
-
     pub fn update_quick_input_keystroke(&mut self, idx: usize, keystroke: &str) {
         if let Some(qi) = self.cache.quick_inputs.get_mut(idx) {
             qi.keystroke = keystroke.to_string();
+        }
+    }
+
+    pub fn update_quick_input_text(&mut self, idx: usize, text: &str) {
+        if let Some(qi) = self.cache.quick_inputs.get_mut(idx) {
+            qi.text = text.to_string();
         }
     }
 
@@ -780,6 +837,10 @@ impl ConfigStore {
 
     pub fn get(&self, id: &str) -> Option<&Session> {
         self.cache.sessions.iter().find(|s| s.id == id)
+    }
+
+    pub fn get_mut(&mut self, id: &str) -> Option<&mut Session> {
+        self.cache.sessions.iter_mut().find(|s| s.id == id)
     }
 
     pub fn upsert(&mut self, session: Session) {

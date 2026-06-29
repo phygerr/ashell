@@ -1544,9 +1544,109 @@ impl Ashell {
             )
     }
 
+    fn render_session_card(
+        &self,
+        session: &crate::session::config::Session,
+        active_session_id: &Option<String>,
+        ix: usize,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let connect_id = session.id.clone();
+        let edit_id = session.id.clone();
+        let delete_id = session.id.clone();
+        let is_active = active_session_id.as_deref() == Some(session.id.as_str());
+        let name = session.name.clone();
+        let detail = self.session_detail(session);
+        div()
+            .id(("saved-connect", ix))
+            .w_full()
+            .p_2()
+            .rounded_md()
+            .border_1()
+            .border_color(if is_active {
+                cx.theme().primary
+            } else {
+                cx.theme().border
+            })
+            .bg(if is_active {
+                cx.theme().tab_active
+            } else {
+                cx.theme().muted
+            })
+            .cursor_pointer()
+            .hover(|this| this.bg(cx.theme().secondary))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, _, cx| {
+                    this.connect_saved_session(connect_id.clone(), cx)
+                }),
+            )
+            .context_menu({
+                let view = cx.entity();
+                move |menu, window, _| {
+                    let edit_value = edit_id.clone();
+                    let clone_value = edit_id.clone();
+                    let delete_value = delete_id.clone();
+                    menu.item(
+                        PopupMenuItem::new(t!("clone").to_string()).on_click(window.listener_for(
+                            &view,
+                            move |this, _, window, cx| {
+                                this.clone_saved_session(clone_value.clone(), window, cx)
+                            },
+                        )),
+                    )
+                    .item(
+                        PopupMenuItem::new(t!("edit").to_string()).on_click(window.listener_for(
+                            &view,
+                            move |this, _, window, cx| {
+                                this.edit_saved_session(edit_value.clone(), window, cx)
+                            },
+                        )),
+                    )
+                    .item(
+                        PopupMenuItem::new(t!("delete").to_string()).on_click(
+                            window.listener_for(&view, move |this, _, _, cx| {
+                                this.remove_saved_session(delete_value.clone(), cx)
+                            }),
+                        ),
+                    )
+                }
+            })
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(rems(1.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(name),
+                    )
+                    .child(
+                        div()
+                            .text_size(rems(0.917))
+                            .text_color(cx.theme().muted_foreground)
+                            .child(detail),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let sessions = self.config.sessions().to_vec();
+        let groups = self.config.session_groups().to_vec();
         let active_session_id = self.active_session_id().map(ToOwned::to_owned);
+
+        // Group sessions by group_id
+        let mut grouped: std::collections::HashMap<String, Vec<crate::session::config::Session>> =
+            std::collections::HashMap::new();
+        for session in sessions {
+            let gid = if session.group_id.is_empty() {
+                String::new()
+            } else {
+                session.group_id.clone()
+            };
+            grouped.entry(gid).or_default().push(session);
+        }
 
         v_flex()
             .gap_4()
@@ -1622,11 +1722,31 @@ impl Ashell {
                 this.child(self.render_sidebar_monitoring_panel(cx))
             })
             .child(
-                Button::new("open-ssh-panel")
-                    .primary()
-                    .label(t!("add_ssh").to_string())
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.open_new_ssh_dialog(window, cx)),
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Button::new("open-ssh-panel")
+                            .primary()
+                            .label(t!("add_ssh").to_string())
+                            .flex_1()
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.open_new_ssh_dialog(window, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("add-group")
+                            .ghost()
+                            .icon(IconName::Plus)
+                            .tooltip(t!("new_group").to_string())
+                            .on_click(
+                                cx.listener(|this, _, _, cx| {
+                                    this.add_session_group(
+                                        t!("new_group").to_string(),
+                                        "#6CB4EE".to_string(),
+                                        cx,
+                                    );
+                                }),
+                            ),
                     ),
             )
             .child(
@@ -1634,13 +1754,6 @@ impl Ashell {
                     .flex_1()
                     .min_h(px(0.))
                     .gap_2()
-                    .child(
-                        div()
-                            .text_size(rems(1.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().primary)
-                            .child(t!("saved")),
-                    )
                     .child(
                         div()
                             .relative()
@@ -1653,115 +1766,129 @@ impl Ashell {
                                     .id("saved-sessions-scroll")
                                     .track_scroll(&self.saved_scroll_handle)
                                     .overflow_y_scroll()
-                                    .gap_2()
-                                    .children(sessions.into_iter().enumerate().map(
-                                        |(ix, session)| {
-                                            let connect_id = session.id.clone();
-                                            let edit_id = session.id.clone();
-                                            let delete_id = session.id.clone();
-                                            let is_active = active_session_id.as_deref()
-                                                == Some(session.id.as_str());
-                                            let name = session.name.clone();
-                                            let detail = self.session_detail(&session);
-                                            div()
-                                                .id(("saved-connect", ix))
-                                                .w_full()
-                                                .p_2()
-                                                .rounded_md()
-                                                .border_1()
-                                                .border_color(if is_active {
-                                                    cx.theme().primary
-                                                } else {
-                                                    cx.theme().border
-                                                })
-                                                .bg(if is_active {
-                                                    cx.theme().tab_active
-                                                } else {
-                                                    cx.theme().muted
-                                                })
-                                                .cursor_pointer()
-                                                .hover(|this| this.bg(cx.theme().secondary))
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    cx.listener(move |this, _, _, cx| {
-                                                        this.connect_saved_session(
-                                                            connect_id.clone(),
-                                                            cx,
-                                                        )
-                                                    }),
-                                                )
-                                                .context_menu({
-                                                    let view = cx.entity();
-                                                    move |menu, window, _| {
-                                                        let edit_value = edit_id.clone();
-                                                        let clone_value = edit_id.clone();
-                                                        let delete_value = delete_id.clone();
-                                                        menu.item(
-                                                            PopupMenuItem::new(
-                                                                t!("clone").to_string(),
+                                    .gap_1()
+                                    .children({
+                                        let mut items: Vec<gpui::AnyElement> = Vec::new();
+                                        let mut ix = 0usize;
+
+                                        // Render default group (sessions with no group_id) first
+                                        if let Some(default_sessions) = grouped.get("") {
+                                            if !default_sessions.is_empty() {
+                                                items.push(
+                                                    div()
+                                                        .text_size(rems(0.85))
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .px_1()
+                                                        .child(t!("default_group")),
+                                                );
+                                                for session in default_sessions {
+                                                    items.push(Self::render_session_card(
+                                                        &self,
+                                                        session,
+                                                        &active_session_id,
+                                                        ix,
+                                                        cx,
+                                                    ));
+                                                    ix += 1;
+                                                }
+                                            }
+                                        }
+
+                                        // Render each group
+                                        for group in &groups {
+                                            let group_sessions =
+                                                grouped.get(&group.id).map(|v| v.as_slice()).unwrap_or(&[]);
+                                            let is_collapsed = group.collapsed;
+
+                                            // Group header
+                                            let group_id = group.id.clone();
+                                            let group_name = group.name.clone();
+                                            let view = cx.entity();
+                                            items.push(
+                                                h_flex()
+                                                    .items_center()
+                                                    .gap_1()
+                                                    .px_1()
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(move |this, _, _, cx| {
+                                                            this.config.toggle_session_group(&group_id);
+                                                            let _ = this.config.save();
+                                                            cx.notify();
+                                                        }),
+                                                    )
+                                                    .context_menu({
+                                                        let view = view.clone();
+                                                        let gid = group.id.clone();
+                                                        let gname = group.name.clone();
+                                                        let gcolor = group.color.clone();
+                                                        move |menu, window, _| {
+                                                            let gid2 = gid.clone();
+                                                            let gname2 = gname.clone();
+                                                            let gcolor2 = gcolor.clone();
+                                                            menu.item(
+                                                                PopupMenuItem::new(t!("edit_group").to_string())
+                                                                    .on_click(window.listener_for(
+                                                                        &view,
+                                                                        move |this, _, window, cx| {
+                                                                            this.show_edit_group_dialog(gid2.clone(), gname2.clone(), gcolor2.clone(), window, cx);
+                                                                        },
+                                                                    )),
                                                             )
-                                                            .on_click(window.listener_for(
-                                                                &view,
-                                                                move |this, _, window, cx| {
-                                                                    this.clone_saved_session(
-                                                                        clone_value.clone(),
-                                                                        window,
-                                                                        cx,
-                                                                    )
-                                                                },
-                                                            )),
-                                                        )
-                                                        .item(
-                                                            PopupMenuItem::new(
-                                                                t!("edit").to_string(),
+                                                            .item(
+                                                                PopupMenuItem::new(t!("delete").to_string())
+                                                                    .on_click(window.listener_for(
+                                                                        &view,
+                                                                        move |this, _, _, cx| {
+                                                                            this.remove_session_group(&gid, cx);
+                                                                        },
+                                                                    )),
                                                             )
-                                                            .on_click(window.listener_for(
-                                                                &view,
-                                                                move |this, _, window, cx| {
-                                                                    this.edit_saved_session(
-                                                                        edit_value.clone(),
-                                                                        window,
-                                                                        cx,
-                                                                    )
-                                                                },
-                                                            )),
-                                                        )
-                                                        .item(
-                                                            PopupMenuItem::new(
-                                                                t!("delete").to_string(),
-                                                            )
-                                                            .on_click(window.listener_for(
-                                                                &view,
-                                                                move |this, _, _, cx| {
-                                                                    this.remove_saved_session(
-                                                                        delete_value.clone(),
-                                                                        cx,
-                                                                    )
-                                                                },
-                                                            )),
-                                                        )
-                                                    }
-                                                })
-                                                .child(
-                                                    v_flex()
-                                                        .gap_1()
-                                                        .child(
-                                                            div()
-                                                                .text_size(rems(1.0))
-                                                                .font_weight(FontWeight::SEMIBOLD)
-                                                                .child(name),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .text_size(rems(0.917))
-                                                                .text_color(
-                                                                    cx.theme().muted_foreground,
-                                                                )
-                                                                .child(detail),
-                                                        ),
-                                                )
-                                        },
-                                    )),
+                                                        }
+                                                    })
+                                                    .child(
+                                                        div()
+                                                            .w(px(8.))
+                                                            .h(px(8.))
+                                                            .rounded_full()
+                                                            .bg(cx.theme().primary),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(rems(0.85))
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                            .text_color(cx.theme().muted_foreground)
+                                                            .child(group_name),
+                                                    )
+                                                    .child(
+                                                        Icon::new(if is_collapsed {
+                                                            IconName::ChevronRight
+                                                        } else {
+                                                            IconName::ChevronDown
+                                                        })
+                                                        .with_size(Size::Small)
+                                                        .text_color(cx.theme().muted_foreground),
+                                                    ),
+                                            );
+
+                                            // Group sessions (if not collapsed)
+                                            if !is_collapsed {
+                                                for session in group_sessions {
+                                                    items.push(Self::render_session_card(
+                                                        &self,
+                                                        session,
+                                                        &active_session_id,
+                                                        ix,
+                                                        cx,
+                                                    ));
+                                                    ix += 1;
+                                                }
+                                            }
+                                        }
+                                        items
+                                    }),
                             )
                             .child(
                                 div()

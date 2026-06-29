@@ -289,6 +289,10 @@ pub(crate) struct Ashell {
     pub(crate) active_dialog: Option<DialogKind>,
     /// Error message when a recorded keybinding conflicts with another
     pub(crate) keybind_error: Option<(String, String)>, // (action_id, error_message)
+    /// Text input for editing quick input text content
+    pub(crate) quick_input_text_input: Entity<InputState>,
+    /// Index of the quick input entry whose text is being edited
+    pub(crate) editing_quick_input_idx: Option<usize>,
     /// Whether workspace keybindings are currently suspended (during settings)
     pub(crate) keybinds_suspended: bool,
     pub(crate) system: SystemSnapshot,
@@ -465,6 +469,12 @@ impl Ashell {
                 .placeholder(t!("sync_encryption_password").to_string())
                 .masked(true)
         });
+        let quick_input_text_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .multi_line(true)
+                .rows(3)
+                .placeholder(t!("quick_input_text_placeholder").to_string())
+        });
 
         let _subscriptions = vec![
             cx.subscribe_in(&host_input, window, Self::on_input_event),
@@ -497,6 +507,7 @@ impl Ashell {
                 window,
                 Self::on_input_event,
             ),
+            cx.subscribe_in(&quick_input_text_input, window, Self::on_input_event),
         ];
 
         let (events_tx, events_rx) = mpsc::channel();
@@ -643,6 +654,8 @@ impl Ashell {
             recording_action: None,
             active_dialog: None,
             keybind_error: None,
+            quick_input_text_input,
+            editing_quick_input_idx: None,
             keybinds_suspended: false,
             system,
             cpu_history: Vec::with_capacity(20),

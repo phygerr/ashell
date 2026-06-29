@@ -546,6 +546,58 @@ impl Ashell {
         cx.notify();
     }
 
+    pub(crate) fn add_session_group(&mut self, name: String, color: String, cx: &mut Context<Self>) {
+        self.config.add_session_group(name, color);
+        if let Err(err) = self.config.save() {
+            tracing::warn!("failed to save config: {err:#}");
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn update_session_group(&mut self, id: String, name: String, color: String, cx: &mut Context<Self>) {
+        self.config.update_session_group(&id, name, color);
+        if let Err(err) = self.config.save() {
+            tracing::warn!("failed to save config: {err:#}");
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn remove_session_group(&mut self, group_id: &str, cx: &mut Context<Self>) {
+        self.config.remove_session_group(group_id);
+        if let Err(err) = self.config.save() {
+            tracing::warn!("failed to save config: {err:#}");
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn move_session_to_group(&mut self, session_id: String, group_id: String, cx: &mut Context<Self>) {
+        if let Some(session) = self.config.get_mut(&session_id) {
+            session.group_id = group_id;
+        }
+        if let Err(err) = self.config.save() {
+            tracing::warn!("failed to save config: {err:#}");
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn show_edit_group_dialog(
+        &mut self,
+        group_id: String,
+        group_name: String,
+        group_color: String,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // For now, just log the action. A full dialog would require
+        // additional input state fields on Ashell.
+        tracing::info!(
+            "[ui] edit group: id={}, name={}, color={}",
+            group_id, group_name, group_color
+        );
+        // TODO: implement a proper edit group dialog
+        cx.notify();
+    }
+
     /// Retry a single disconnected tab by its ID.
     /// For SSH tabs: spawns a new SSH connection and restarts SFTP.
     /// For local tabs: spawns a new local shell.

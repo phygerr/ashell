@@ -1,11 +1,14 @@
 use gpui::{
-    Action as _, App, Entity, IntoElement, KeyBinding, KeyDownEvent, Keystroke, Unbind, div,
+    Action as _, App, Entity, InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent,
+    Keystroke, MouseButton, Unbind,
+    div,
     prelude::*,
 };
 use gpui_component::{
-    ActiveTheme as _, IconName, Sizable,
+    ActiveTheme as _, IconName, Sizable, WindowExt as _,
     button::{Button, ButtonVariants},
     h_flex,
+    input::{Input, InputState},
     kbd::Kbd,
     setting::{SettingField, SettingGroup, SettingItem},
 };
@@ -436,47 +439,103 @@ impl KeybindingsPage {
                 qi_text.clone(),
                 SettingField::render({
                     let view = view.clone();
-                    move |_, _window, cx| {
+                    move |_, window, cx| {
                         let view2 = view.clone();
+                        let is_editing = view.read(cx).editing_quick_input_idx == Some(idx);
+
+                        // Keystroke button
+                        let key_btn: gpui::AnyElement = Button::new(gpui::SharedString::from(format!("qi-key-{idx}")))
+                            .label(btn_label.clone())
+                            .small()
+                            .when(recording, |this| this.primary())
+                            .on_click({
+                                let view = view.clone();
+                                move |_event, window, cx| {
+                                    view.update(cx, |this, cx| {
+                                        this.keybind_error = None;
+                                        this.recording_action = Some(format!("quick_input_{idx}"));
+                                        this.focus_handle.focus(window, cx);
+                                        cx.notify();
+                                    });
+                                }
+                            })
+                            .into_any_element();
+
+                        // Text content area: Input when editing, clickable label otherwise
+                        let text_area: gpui::AnyElement = if is_editing {
+                            let input_entity = view.read(cx).quick_input_text_input.clone();
+                            let view3 = view.clone();
+                            // Wrap Input in a div so on_mouse_down_out can detect clicks outside
+                            div()
+                                .flex_1()
+                                .on_mouse_down_out(move |_, _, cx| {
+                                    view3.update(cx, |this, cx| {
+                                        if let Some(edit_idx) = this.editing_quick_input_idx {
+                                            let text = this.quick_input_text_input.read(cx).value().to_string();
+                                            this.config.update_quick_input_text(edit_idx, &text);
+                                            this.editing_quick_input_idx = None;
+                                            if let Err(err) = this.config.save() {
+                                                tracing::error!("failed to save quick input text: {err:#}");
+                                            }
+                                            cx.notify();
+                                        }
+                                    });
+                                })
+                                .child(Input::new(&input_entity).w_full())
+                                .into_any_element()
+                        } else {
+                            let view3 = view.clone();
+                            div()
+                                .flex_1()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .cursor_pointer()
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    window.listener_for(
+                                        &view3,
+                                        move |this, _, window, cx| {
+                                            this.editing_quick_input_idx = Some(idx);
+                                            if let Some(qi) = this.config.quick_inputs().get(idx) {
+                                                let text: gpui::SharedString = qi.text.clone().into();
+                                                this.quick_input_text_input.update(cx, |state, cx| {
+                                                    state.set_value(text, window, cx);
+                                                });
+                                            }
+                                            cx.notify();
+                                        },
+                                    ),
+                                )
+                                .child(qi_text.clone())
+                                .into_any_element()
+                        };
+
+                        // Delete button
+                        let del_btn: gpui::AnyElement = Button::new(gpui::SharedString::from(format!("qi-del-{idx}")))
+                            .small()
+                            .icon(IconName::Close)
+                            .on_click(move |_, _, cx| {
+                                view2.update(cx, |this, cx| {
+                                    this.config.remove_quick_input(idx);
+                                    if this.editing_quick_input_idx == Some(idx) {
+                                        this.editing_quick_input_idx = None;
+                                    } else if let Some(edit_idx) = this.editing_quick_input_idx {
+                                        if edit_idx > idx {
+                                            this.editing_quick_input_idx = Some(edit_idx - 1);
+                                        }
+                                    }
+                                    let _ = this.config.save();
+                                    cx.notify();
+                                });
+                            })
+                            .into_any_element();
+
                         h_flex()
                             .gap_2()
                             .items_center()
-                            .child(
-                                Button::new(gpui::SharedString::from(format!("qi-key-{idx}")))
-                                    .label(btn_label.clone())
-                                    .small()
-                                    .when(recording, |this| this.primary())
-                                    .on_click({
-                                        let view = view.clone();
-                                        move |_event, window, cx| {
-                                            view.update(cx, |this, cx| {
-                                                this.keybind_error = None;
-                                                this.recording_action = Some(format!("quick_input_{idx}"));
-                                                this.focus_handle.focus(window, cx);
-                                                cx.notify();
-                                            });
-                                        }
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(qi_text.clone()),
-                            )
-                            .child(
-                                Button::new(gpui::SharedString::from(format!("qi-del-{idx}")))
-                                    .small()
-                                    .icon(IconName::Close)
-                                    .on_click(move |_, _, cx| {
-                                        view2.update(cx, |this, cx| {
-                                            this.config.remove_quick_input(idx);
-                                            let _ = this.config.save();
-                                            cx.notify();
-                                        });
-                                    }),
-                            )
+                            .child(key_btn)
+                            .child(text_area)
+                            .child(del_btn)
                             .into_any_element()
                     }
                 }),
