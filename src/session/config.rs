@@ -436,6 +436,7 @@ impl ConfigStore {
         id
     }
 
+    #[allow(dead_code)]
     pub fn update_session_group(&mut self, id: &str, name: String, color: String) {
         if let Some(group) = self.cache.session_groups.iter_mut().find(|g| g.id == id) {
             group.name = name;
@@ -811,6 +812,7 @@ impl ConfigStore {
         self.cache.sessions.iter().find(|s| s.id == id)
     }
 
+    #[allow(dead_code)]
     pub fn get_mut(&mut self, id: &str) -> Option<&mut Session> {
         self.cache.sessions.iter_mut().find(|s| s.id == id)
     }

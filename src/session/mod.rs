@@ -563,6 +563,7 @@ impl Ashell {
         cx.notify();
     }
 
+    #[allow(dead_code)]
     pub(crate) fn update_session_group(&mut self, id: String, name: String, color: String, cx: &mut Context<Self>) {
         self.config.update_session_group(&id, name, color);
         if let Err(err) = self.config.save() {
@@ -579,6 +580,7 @@ impl Ashell {
         cx.notify();
     }
 
+    #[allow(dead_code)]
     pub(crate) fn move_session_to_group(&mut self, session_id: String, group_id: String, cx: &mut Context<Self>) {
         if let Some(session) = self.config.get_mut(&session_id) {
             session.group_id = group_id;
