@@ -2,12 +2,12 @@ pub mod config;
 
 use gpui::{
     App, AppContext as _, Context, Entity, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, SharedString, Window, div, px,
+    MouseMoveEvent, ParentElement as _, SharedString, Styled as _, Window, div, px,
 };
 use gpui_component::{
     Theme, WindowExt as _,
     dialog::Dialog,
-    h_flex, v_flex,
+    v_flex,
     input::{Input, InputState},
 };
 use rust_i18n::t;

@@ -1,5 +1,5 @@
 use gpui::{
-    Anchor, Context, Focusable as _, FontWeight, InteractiveElement as _, MouseButton,
+    Anchor, Context, Focusable as _, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
     ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px, rems,
 };
