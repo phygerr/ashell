@@ -439,7 +439,7 @@ impl KeybindingsPage {
                 qi_text.clone(),
                 SettingField::render({
                     let view = view.clone();
-                    move |_, window, cx| {
+                    move |_, _window, cx| {
                         let view2 = view.clone();
                         let is_editing = view.read(cx).editing_quick_input_idx == Some(idx);
 

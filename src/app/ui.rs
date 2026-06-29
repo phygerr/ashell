@@ -1842,8 +1842,11 @@ impl Ashell {
                                                                 PopupMenuItem::new(t!("delete").to_string())
                                                                     .on_click(window.listener_for(
                                                                         &view,
-                                                                        move |this, _, _, cx| {
-                                                                            this.remove_session_group(&gid, cx);
+                                                                        {
+                                                                            let gid_for_delete = gid.clone();
+                                                                            move |this, _, _, cx| {
+                                                                                this.remove_session_group(&gid_for_delete, cx);
+                                                                            }
                                                                         },
                                                                     )),
                                                             )
