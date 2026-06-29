@@ -436,7 +436,7 @@ impl KeybindingsPage {
             };
 
             let item = SettingItem::new(
-                qi_text.clone(),
+                btn_label.clone(),
                 SettingField::render({
                     let view = view.clone();
                     move |_, _window, cx| {

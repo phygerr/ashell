@@ -217,6 +217,43 @@ impl Ashell {
                                             .child(Input::new(&proxy_password_input).flex_1())
                                     )
                                 })
+                                .child({
+                                    let groups = view.read(cx).config.session_groups().to_vec();
+                                    let current_group_id = view.read(cx).session_group_id.clone();
+                                    h_flex()
+                                        .gap_1()
+                                        .items_center()
+                                        .child(div().text_sm().child(t!("default_group")))
+                                        .child(
+                                            Button::new("group-none")
+                                                .small()
+                                                .label(t!("default_group"))
+                                                .when(current_group_id.is_empty(), |b| b.primary())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.session_group_id = String::new();
+                                                        cx.notify();
+                                                    },
+                                                )),
+                                        )
+                                        .children(groups.into_iter().map(|g| {
+                                            let gid = g.id.clone();
+                                            let gname = g.name.clone();
+                                            Button::new(format!("group-{gid}"))
+                                                .small()
+                                                .label(gname)
+                                                .when(current_group_id == gid, |b| b.primary())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    move |this, _, _, cx| {
+                                                        this.session_group_id = gid.clone();
+                                                        cx.notify();
+                                                    },
+                                                ))
+                                                .into_any_element()
+                                        }))
+                                })
                                 .child(
                                     h_flex()
                                         .justify_end()

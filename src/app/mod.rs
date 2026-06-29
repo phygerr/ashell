@@ -236,6 +236,7 @@ pub(crate) struct Ashell {
     pub(crate) sftp_path_input: Entity<InputState>,
     pub(crate) ssh_auth_method: AuthMethod,
     pub(crate) editing_session_id: Option<String>,
+    pub(crate) session_group_id: String,
     pub(crate) follow_system_theme: bool,
     pub(crate) theme_mode: ThemeMode,
     pub(crate) light_theme_name: SharedString,
@@ -482,7 +483,7 @@ impl Ashell {
         let quick_input_text_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .multi_line(true)
-                .rows(3)
+                .rows(5)
                 .placeholder(t!("quick_input_text_placeholder").to_string())
         });
 
@@ -600,6 +601,7 @@ impl Ashell {
             sftp_path_input,
             ssh_auth_method: AuthMethod::Password,
             editing_session_id: None,
+            session_group_id: String::new(),
             follow_system_theme,
             theme_mode,
             light_theme_name,

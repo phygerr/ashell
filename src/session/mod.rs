@@ -2,9 +2,14 @@ pub mod config;
 
 use gpui::{
     App, AppContext as _, Context, Entity, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, SharedString, Window, px,
+    MouseMoveEvent, SharedString, Window, div, px,
 };
-use gpui_component::{Theme, WindowExt as _, input::InputState};
+use gpui_component::{
+    Theme, WindowExt as _,
+    dialog::Dialog,
+    h_flex, v_flex,
+    input::{Input, InputState},
+};
 use rust_i18n::t;
 use uuid::Uuid;
 
@@ -128,6 +133,7 @@ impl Ashell {
             .ok();
         session.proxy_user = self.proxy_user_input.read(cx).value().trim().to_string();
         session.proxy_password = self.proxy_password_input.read(cx).value().to_string();
+        session.group_id = self.session_group_id.clone();
         self.config.upsert(session.clone());
         if let Err(err) = self.config.save() {
             tracing::warn!("failed to save config: {err:#}");
@@ -165,6 +171,7 @@ impl Ashell {
         Self::set_input_value(&self.proxy_port_input, "", window, cx);
         Self::set_input_value(&self.proxy_user_input, "", window, cx);
         Self::set_input_value(&self.proxy_password_input, "", window, cx);
+        self.session_group_id = String::new();
     }
 
     pub(crate) fn load_session_into_form(
@@ -212,6 +219,7 @@ impl Ashell {
         );
         Self::set_input_value(&self.proxy_user_input, session.proxy_user.clone(), window, cx);
         Self::set_input_value(&self.proxy_password_input, session.proxy_password.clone(), window, cx);
+        self.session_group_id = session.group_id.clone();
     }
 
     pub(crate) fn pick_ssh_key_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -563,7 +571,6 @@ impl Ashell {
         cx.notify();
     }
 
-    #[allow(dead_code)]
     pub(crate) fn update_session_group(&mut self, id: String, name: String, color: String, cx: &mut Context<Self>) {
         self.config.update_session_group(&id, name, color);
         if let Err(err) = self.config.save() {
@@ -596,17 +603,69 @@ impl Ashell {
         group_id: String,
         group_name: String,
         group_color: String,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // For now, just log the action. A full dialog would require
-        // additional input state fields on Ashell.
-        tracing::info!(
-            "[ui] edit group: id={}, name={}, color={}",
-            group_id, group_name, group_color
-        );
-        // TODO: implement a proper edit group dialog
-        cx.notify();
+        let name_input = cx.new(|cx| InputState::new(window, cx).default_value(group_name));
+        let color_input = cx.new(|cx| InputState::new(window, cx).default_value(group_color));
+
+        let view = cx.entity();
+        let gid = group_id;
+
+        window.open_dialog(cx, move |dialog: Dialog, _window, _cx| {
+            dialog
+                .title(t!("edit_group"))
+                .w(px(400.))
+                .overlay_closable(true)
+                .on_close({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |this, cx| {
+                            this.active_dialog = None;
+                            cx.notify();
+                        });
+                    }
+                })
+                .content({
+                    let name_input = name_input.clone();
+                    let color_input = color_input.clone();
+                    move |content, _window, _cx| {
+                        content.child(
+                            v_flex()
+                                .gap_3()
+                                .child(
+                                    v_flex()
+                                        .gap_1()
+                                        .child(div().text_sm().child(t!("group_name")))
+                                        .child(Input::new(&name_input)),
+                                )
+                                .child(
+                                    v_flex()
+                                        .gap_1()
+                                        .child(div().text_sm().child(t!("group_color")))
+                                        .child(Input::new(&color_input)),
+                                ),
+                        )
+                    }
+                })
+                .on_ok({
+                    let view = view.clone();
+                    let name_input = name_input.clone();
+                    let color_input = color_input.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |this, cx| {
+                            let name = name_input.read(cx).value().trim().to_string();
+                            let color = color_input.read(cx).value().trim().to_string();
+                            let color = if color.is_empty() { "#6CB4EE".to_string() } else { color };
+                            let name = if name.is_empty() { t!("new_group").to_string() } else { name };
+                            this.update_session_group(gid.clone(), name, color, cx);
+                            this.active_dialog = None;
+                            cx.notify();
+                        });
+                        true
+                    }
+                })
+        });
     }
 
     /// Retry a single disconnected tab by its ID.

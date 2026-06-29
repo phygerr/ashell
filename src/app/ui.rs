@@ -1812,14 +1812,6 @@ impl Ashell {
                                                     .gap_1()
                                                     .px_1()
                                                     .cursor_pointer()
-                                                    .on_mouse_down(
-                                                        MouseButton::Left,
-                                                        cx.listener(move |this, _, _, cx| {
-                                                            this.config.toggle_session_group(&group_id);
-                                                            let _ = this.config.save();
-                                                            cx.notify();
-                                                        }),
-                                                    )
                                                     .context_menu({
                                                         let view = view.clone();
                                                         let gid = group.id.clone();
@@ -1852,6 +1844,14 @@ impl Ashell {
                                                             )
                                                         }
                                                     })
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(move |this, _, _, cx| {
+                                                            this.config.toggle_session_group(&group_id);
+                                                            let _ = this.config.save();
+                                                            cx.notify();
+                                                        }),
+                                                    )
                                                     .child(
                                                         div()
                                                             .w(px(8.))
