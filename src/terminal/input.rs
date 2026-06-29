@@ -119,6 +119,15 @@ impl Ashell {
             && !event.keystroke.modifiers.alt
             && !event.keystroke.modifiers.platform
         {
+            if let Some(progress) = &self.connection_progress {
+                if progress.failed {
+                    self.retry_connection_progress(cx);
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+
             let active_id = self.active_tab.clone();
             if let Some(active_id) = active_id {
                 let is_disconnected = self
@@ -142,7 +151,8 @@ impl Ashell {
                 if let Some(active_id) = active_id {
                     let is_connected = self.tabs.iter().find(|t| t.id == active_id).is_some_and(|tab| tab.connected);
                     if is_connected {
-                        let mut bytes = qi.text.as_bytes().to_vec();
+                        let text = qi.text.replace('\n', "\r");
+                        let mut bytes = text.into_bytes();
                         bytes.push(b'\r');
                         self.send_terminal_input(bytes, window, cx);
                         return;
@@ -229,7 +239,12 @@ impl Ashell {
             .and_then(|tab| tab.selection_text())
     }
 
-    pub(crate) fn paste_into_terminal(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn paste_into_terminal(
+        &mut self,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(active_id) = self.active_tab.clone() else {
             return;
         };
@@ -497,6 +512,24 @@ impl Ashell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Platform modifier (Cmd on macOS, Ctrl on Windows/Linux) + scroll → zoom terminal font size
+        if event.modifiers.platform {
+            let delta = match event.delta {
+                ScrollDelta::Lines(point) => point.y as f32 * 20.0,
+                ScrollDelta::Pixels(point) => point.y.as_f32(),
+            };
+            self.terminal_zoom_accumulator += delta;
+            let step = 20.0;
+            if self.terminal_zoom_accumulator.abs() >= step {
+                let zoom_steps = (self.terminal_zoom_accumulator / step).trunc();
+                self.terminal_zoom_accumulator -= zoom_steps * step;
+                self.change_terminal_font_size(zoom_steps * 0.5, cx);
+            }
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+
         let Some(active_id) = self.active_tab.clone() else {
             return;
         };

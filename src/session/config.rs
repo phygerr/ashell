@@ -6,11 +6,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "lowercase")]
 pub enum AuthMethod {
     Password,
     Key,
-    KeyboardInteractive,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +30,7 @@ pub struct Session {
     pub passphrase: String,
     #[serde(default)]
     pub last_used: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_global_proxy_type")]
     pub proxy_type: String, // "none", "socks5", "http"
     #[serde(default)]
     pub proxy_host: String,
@@ -89,33 +88,6 @@ impl Session {
             private_key_path,
             private_key_inline,
             passphrase,
-            last_used: None,
-            proxy_type: "none".to_string(),
-            proxy_host: String::new(),
-            proxy_port: None,
-            proxy_user: String::new(),
-            proxy_password: String::new(),
-            group_id: String::new(),
-        }
-    }
-
-    pub fn keyboard_interactive(
-        host: String,
-        port: u16,
-        user: String,
-    ) -> Self {
-        let name = format!("{user}@{host}");
-        Self {
-            id: Uuid::new_v4().to_string(),
-            name,
-            host,
-            port,
-            user,
-            auth: AuthMethod::KeyboardInteractive,
-            password: String::new(),
-            private_key_path: String::new(),
-            private_key_inline: String::new(),
-            passphrase: String::new(),
             last_used: None,
             proxy_type: "none".to_string(),
             proxy_host: String::new(),

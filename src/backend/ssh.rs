@@ -16,23 +16,8 @@ use tokio::sync::mpsc;
 use crate::{
     session::config::{AuthMethod, Session},
     system::{SystemSnapshot, remote_snapshot_from_kv},
-    terminal::{BackendCommand, BackendEvent, BackendTx, PromptType, PromptInfo},
+    terminal::{BackendCommand, BackendEvent, BackendTx},
 };
-use std::sync::OnceLock;
-use std::collections::HashMap;
-use tokio::sync::Mutex;
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CachedCreds {
-    pub password: Option<String>,
-    pub passphrase: Option<String>,
-    pub kb_responses: Option<Vec<String>>,
-}
-
-pub static CREDENTIALS_CACHE: OnceLock<std::sync::Mutex<HashMap<String, CachedCreds>>> = OnceLock::new();
-
-pub static PROMPT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub fn spawn_ssh_terminal(
     runtime: &tokio::runtime::Handle,
@@ -110,7 +95,7 @@ async fn run_ssh(
     });
 
     let handle = Arc::new(tokio::sync::Mutex::new(
-        connect_and_authenticate(&tab_id, &session, &events, &mut commands).await?,
+        connect_and_authenticate(&tab_id, &session, &events).await?,
     ));
 
     let mut channel = handle
@@ -171,9 +156,6 @@ async fn run_ssh(
                             }
                         });
                     }
-                    Some(BackendCommand::PromptResponse(_)) => {
-                        tracing::warn!("[ssh] received unexpected prompt response after authentication");
-                    }
                     Some(BackendCommand::Close) | None => {
                         tracing::info!("[ssh] local client closed the session for tab {}", tab_id);
                         let _ = channel.eof().await;
@@ -231,27 +213,10 @@ async fn run_ssh(
     Ok(())
 }
 
-async fn load_session_private_key_with_cache(session: &Session) -> Result<PrivateKey> {
-    let cached_passphrase = {
-        let cache_lock = CREDENTIALS_CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-        let cache = cache_lock.lock().unwrap();
-        cache.get(&session.id).and_then(|c| c.passphrase.clone())
-    };
-    if let Some(p) = cached_passphrase {
-        let mut temp_session = session.clone();
-        temp_session.passphrase = p;
-        if let Ok(key) = load_session_private_key(&temp_session) {
-            return Ok(key);
-        }
-    }
-    load_session_private_key(session)
-}
-
 async fn connect_and_authenticate(
     tab_id: &str,
     session: &Session,
     events: &std::sync::mpsc::Sender<BackendEvent>,
-    commands: &mut mpsc::UnboundedReceiver<BackendCommand>,
 ) -> Result<russh::client::Handle<ClientHandler>> {
     let config = Arc::new(client::Config {
         inactivity_timeout: Some(std::time::Duration::from_secs(600)),
@@ -313,55 +278,7 @@ async fn connect_and_authenticate(
                 tab_id: tab_id.to_string(),
                 text: format!("connected to {addr}, loading private key from {source}"),
             });
-            let mut keypair = load_session_private_key_with_cache(session).await;
-            if let Err(e) = &keypair {
-                let err_str = e.to_string();
-                if err_str.contains("encrypted") || err_str.contains("passphrase") || err_str.contains("decrypt") {
-                    let prompt_lock = PROMPT_LOCK.get_or_init(|| Mutex::new(()));
-                    let _guard = prompt_lock.lock().await;
-                    let _ = events.send(BackendEvent::PromptRequest {
-                        tab_id: tab_id.to_string(),
-                        prompt_type: PromptType::Passphrase,
-                        instruction: format!("Enter passphrase for private key (source: {})", source),
-                        prompts: vec![PromptInfo {
-                            prompt: "Passphrase".to_string(),
-                            echo: false,
-                        }],
-                    });
-                    let mut passphrase_res = None;
-                    while let Some(cmd) = commands.recv().await {
-                        match cmd {
-                            BackendCommand::PromptResponse(responses) => {
-                                if let Some(p) = responses.first().cloned() {
-                                    passphrase_res = Some(p);
-                                }
-                                break;
-                            }
-                            BackendCommand::Close => {
-                                return Err(anyhow!("Authentication cancelled by user"));
-                            }
-                            _ => {}
-                        }
-                    }
-                    if let Some(p) = passphrase_res {
-                        {
-                            let cache_lock = CREDENTIALS_CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-                            let mut cache = cache_lock.lock().unwrap();
-                            cache.entry(session.id.clone()).or_insert_with(|| CachedCreds {
-                                password: None,
-                                passphrase: None,
-                                kb_responses: None,
-                            }).passphrase = Some(p.clone());
-                        }
-                        let mut temp_session = session.clone();
-                        temp_session.passphrase = p;
-                        keypair = load_session_private_key(&temp_session);
-                    } else {
-                        return Err(anyhow!("Passphrase prompt cancelled"));
-                    }
-                }
-            }
-            let keypair = keypair.context("failed to load private key")?;
+            let keypair = load_session_private_key(session)?;
             let algorithm = format!("{:?}", keypair.algorithm());
             let _ = events.send(BackendEvent::Status {
                 tab_id: tab_id.to_string(),
@@ -397,83 +314,6 @@ async fn connect_and_authenticate(
             }
             success
         }
-        AuthMethod::KeyboardInteractive => {
-            let cached = {
-                let cache_lock = CREDENTIALS_CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-                let cache = cache_lock.lock().unwrap();
-                cache.get(&session.id).cloned()
-            };
-            let mut response = if cached.as_ref().and_then(|c| c.kb_responses.as_ref()).is_some() {
-                handle.authenticate_keyboard_interactive_start(&session.user, None).await?
-            } else {
-                let prompt_lock = PROMPT_LOCK.get_or_init(|| Mutex::new(()));
-                let _guard = prompt_lock.lock().await;
-                handle.authenticate_keyboard_interactive_start(&session.user, None).await?
-            };
-            loop {
-                match response {
-                    russh::client::KeyboardInteractiveAuthResponse::Success => {
-                        break true;
-                    }
-                    russh::client::KeyboardInteractiveAuthResponse::Failure => {
-                        break false;
-                    }
-                    russh::client::KeyboardInteractiveAuthResponse::InfoRequest { name, instructions, prompts } => {
-                        let mut responses = Vec::new();
-                        let mut cache_hit = false;
-                        if let Some(c) = cached.as_ref().and_then(|c| c.kb_responses.as_ref()) {
-                            if c.len() == prompts.len() {
-                                responses = c.clone();
-                                cache_hit = true;
-                            }
-                        }
-                        if !cache_hit {
-                            let prompt_lock = PROMPT_LOCK.get_or_init(|| Mutex::new(()));
-                            let _guard = prompt_lock.lock().await;
-                            let mut prompt_infos = Vec::new();
-                            for p in &prompts {
-                                prompt_infos.push(PromptInfo {
-                                    prompt: p.prompt.clone(),
-                                    echo: p.echo,
-                                });
-                            }
-                            let _ = events.send(BackendEvent::PromptRequest {
-                                tab_id: tab_id.to_string(),
-                                prompt_type: PromptType::KeyboardInteractive,
-                                instruction: format!("{}\n{}", name, instructions),
-                                prompts: prompt_infos,
-                            });
-                            let mut prompt_res = None;
-                            while let Some(cmd) = commands.recv().await {
-                                match cmd {
-                                    BackendCommand::PromptResponse(res) => {
-                                        prompt_res = Some(res);
-                                        break;
-                                    }
-                                    BackendCommand::Close => {
-                                        return Err(anyhow!("Authentication cancelled"));
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            if let Some(res) = prompt_res {
-                                responses = res;
-                                let cache_lock = CREDENTIALS_CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-                                let mut cache = cache_lock.lock().unwrap();
-                                cache.entry(session.id.clone()).or_insert_with(|| CachedCreds {
-                                    password: None,
-                                    passphrase: None,
-                                    kb_responses: None,
-                                }).kb_responses = Some(responses.clone());
-                            } else {
-                                return Err(anyhow!("Keyboard-interactive cancelled"));
-                            }
-                        }
-                        response = handle.authenticate_keyboard_interactive_respond(responses).await?;
-                    }
-                }
-            }
-        }
     };
 
     if !authed {
@@ -494,10 +334,6 @@ async fn connect_and_authenticate(
                     session.host,
                     session.port,
                     key_source_label(session)
-                ),
-                AuthMethod::KeyboardInteractive => format!(
-                    "authentication failed: server rejected keyboard-interactive authentication for {}@{}:{}",
-                    session.user, session.host, session.port
                 ),
             }
         ));

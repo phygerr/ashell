@@ -1,5 +1,5 @@
 use gpui::{
-    Anchor, AppContext as _, Context, Focusable as _, FontWeight, InteractiveElement as _, MouseButton,
+    Anchor, Context, Focusable as _, FontWeight, InteractiveElement as _, MouseButton,
     ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px, rems,
 };
@@ -8,7 +8,7 @@ use gpui_component::{
     button::{Button, ButtonVariants as _},
     dialog::Dialog,
     h_flex,
-    input::{Input, InputState},
+    input::Input,
     menu::{DropdownMenu as _, PopupMenuItem},
     progress::Progress,
     scroll::{Scrollbar, ScrollbarShow},
@@ -70,10 +70,7 @@ impl Ashell {
                     let proxy_user_input = proxy_user_input.clone();
                     let proxy_password_input = proxy_password_input.clone();
                     move |content, window, cx| {
-                        let method = view.read(cx).ssh_auth_method;
-                        let is_password = method == AuthMethod::Password;
-                        let is_key = method == AuthMethod::Key;
-                        let is_kb = method == AuthMethod::KeyboardInteractive;
+                        let is_password = view.read(cx).ssh_auth_method == AuthMethod::Password;
                         let is_editing = view.read(cx).editing_session_id.is_some();
                         let proxy_type = view.read(cx).ssh_proxy_type.clone();
                         let show_proxy_fields = proxy_type != "none";
@@ -102,13 +99,13 @@ impl Ashell {
                                                             AuthMethod::Password,
                                                             cx,
                                                         )
-                                                     },
-                                                 )),
+                                                    },
+                                                )),
                                         )
                                         .child(
                                             Button::new("ssh-auth-key")
                                                 .label(t!("key").to_string())
-                                                .when(is_key, |button| button.primary())
+                                                .when(!is_password, |button| button.primary())
                                                 .on_click(window.listener_for(
                                                     &view,
                                                     |this, _, _, cx| {
@@ -116,22 +113,8 @@ impl Ashell {
                                                             AuthMethod::Key,
                                                             cx,
                                                         )
-                                                     },
-                                                 )),
-                                        )
-                                        .child(
-                                            Button::new("ssh-auth-kb")
-                                                .label(t!("keyboard_interactive").to_string())
-                                                .when(is_kb, |button| button.primary())
-                                                .on_click(window.listener_for(
-                                                    &view,
-                                                    |this, _, _, cx| {
-                                                        this.set_ssh_auth_method(
-                                                            AuthMethod::KeyboardInteractive,
-                                                            cx,
-                                                        )
-                                                     },
-                                                 )),
+                                                    },
+                                                )),
                                         ),
                                 )
                                 .when(is_password, |this| {
@@ -139,7 +122,7 @@ impl Ashell {
                                         Input::new(&password_input).mask_toggle().tab_index(4),
                                     )
                                 })
-                                .when(is_key, |this| {
+                                .when(!is_password, |this| {
                                     this.child(
                                         h_flex()
                                             .gap_2()
@@ -1489,9 +1472,10 @@ impl Ashell {
                                                                     .label({
                                                                         let current = view.read(cx).ui_font_family.to_string();
                                                                         let names = cx.text_system().all_font_names();
+                                                                        let using_system_maple = crate::app::theme::USING_SYSTEM_MAPLE.load(std::sync::atomic::Ordering::Relaxed);
                                                                         if current == *".SystemUIFont" || current.is_empty() || !names.contains(&current) {
                                                                             t!("system_default").to_string()
-                                                                        } else if current == "Maple Mono NF CN" {
+                                                                        } else if !using_system_maple && current == "Maple Mono NF CN" {
                                                                             format!("Maple Mono NF CN ({})", t!("software_builtin"))
                                                                         } else {
                                                                             current
@@ -1511,7 +1495,8 @@ impl Ashell {
                                                                                     }))
                                                                             );
                                                                             let maple_font = "Maple Mono NF CN".to_string();
-                                                                            if names.contains(&maple_font) {
+                                                                            let using_system_maple = crate::app::theme::USING_SYSTEM_MAPLE.load(std::sync::atomic::Ordering::Relaxed);
+                                                                            if !using_system_maple && names.contains(&maple_font) {
                                                                                 names.retain(|n| n != &maple_font);
                                                                                 menu = menu.item(
                                                                                     PopupMenuItem::new(format!("{} ({})", maple_font, t!("software_builtin")))
@@ -1550,7 +1535,8 @@ impl Ashell {
                                                                     .icon(IconName::ChevronsUpDown)
                                                                     .label({
                                                                         let current = view.read(cx).terminal_font_family.to_string();
-                                                                        if current == "Maple Mono NF CN" {
+                                                                        let using_system_maple = crate::app::theme::USING_SYSTEM_MAPLE.load(std::sync::atomic::Ordering::Relaxed);
+                                                                        if !using_system_maple && current == "Maple Mono NF CN" {
                                                                             format!("Maple Mono NF CN ({})", t!("software_builtin"))
                                                                         } else {
                                                                             current
@@ -1563,7 +1549,8 @@ impl Ashell {
                                                                             let mut names = cx.text_system().all_font_names();
                                                                             menu = menu.min_w(200.).max_h(px(320.)).scrollable(true);
                                                                             let maple_font = "Maple Mono NF CN".to_string();
-                                                                            if names.contains(&maple_font) {
+                                                                            let using_system_maple = crate::app::theme::USING_SYSTEM_MAPLE.load(std::sync::atomic::Ordering::Relaxed);
+                                                                            if !using_system_maple && names.contains(&maple_font) {
                                                                                 names.retain(|n| n != &maple_font);
                                                                                 menu = menu.item(
                                                                                     PopupMenuItem::new(format!("{} ({})", maple_font, t!("software_builtin")))
@@ -2032,7 +2019,7 @@ impl Ashell {
                                                         )
                                                         .child(
                                                             div()
-                                                                 .text_size(rems(0.9))
+                                                                .text_size(rems(0.9))
                                                                 .text_color(cx.theme().muted_foreground)
                                                                 .child(t!("about_feedback_hint")),
                                                         )
@@ -2050,103 +2037,6 @@ impl Ashell {
                                 )
                         )
                     }
-                })
-        });
-    }
-
-    pub(crate) fn show_interactive_prompt_dialog(
-        &mut self,
-        tab_id: String,
-        prompt_type: crate::terminal::PromptType,
-        instruction: String,
-        prompts: Vec<crate::terminal::PromptInfo>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let view = cx.entity();
-
-        // Dynamically instantiate InputState for each prompt
-        let mut input_states = Vec::new();
-        for p in &prompts {
-            let is_masked = !p.echo;
-            let input_state = cx.new(|cx| {
-                let mut state = InputState::new(window, cx).placeholder(p.prompt.clone());
-                if is_masked {
-                    state = state.masked(true);
-                }
-                state
-            });
-            input_states.push(input_state);
-        }
-
-        let tab_id_clone = tab_id.clone();
-        let input_states_clone = input_states.clone();
-
-        self.active_dialog = Some(crate::app::DialogKind::PromptRequest);
-
-        let tab_id_for_close = tab_id.clone();
-
-        window.open_dialog(cx, move |dialog: Dialog, _window, _| {
-            let title = match prompt_type {
-                crate::terminal::PromptType::KeyboardInteractive => "Keyboard Interactive Authentication",
-                crate::terminal::PromptType::Passphrase => "Enter Private Key Passphrase",
-            };
-
-            let tab_id_for_ok = tab_id_clone.clone();
-            let input_states_for_ok = input_states_clone.clone();
-            let view_for_ok = view.clone();
-
-            let view_for_close = view.clone();
-            let tab_id_for_close = tab_id_for_close.clone();
-
-            let instruction_for_content = instruction.clone();
-            let input_states_for_content = input_states_clone.clone();
-
-            dialog
-                .title(title)
-                .w(px(500.))
-                .overlay_closable(false)
-                .on_close(move |_, _, cx| {
-                    view_for_close.update(cx, |this, cx| {
-                        this.active_dialog = None;
-                        // Send Close command to abort connection if they close the dialog without OK
-                        if let Some(tab) = this.tabs.iter().find(|t| t.id == tab_id_for_close) {
-                            tab.send_backend(crate::terminal::BackendCommand::Close);
-                        }
-                        cx.notify();
-                    });
-                })
-                .on_ok(move |_, window, cx| {
-                    view_for_ok.update(cx, |this, cx| {
-                        this.active_dialog = None;
-                        let mut responses = Vec::new();
-                        for state in &input_states_for_ok {
-                            responses.push(state.read(cx).text().to_string());
-                        }
-                        if let Some(tab) = this.tabs.iter().find(|t| t.id == tab_id_for_ok) {
-                            tab.send_backend(crate::terminal::BackendCommand::PromptResponse(responses));
-                        }
-                        cx.notify();
-                    });
-                    window.close_dialog(cx);
-                    true
-                })
-                .content(move |content, _window, _cx| {
-                    let mut container = v_flex().gap_3();
-                    if !instruction_for_content.is_empty() {
-                        container = container.child(
-                            div()
-                                .text_sm()
-                                .text_color(gpui::rgba(0x808080ff))
-                                .child(instruction_for_content.clone())
-                        );
-                    }
-                    for input_state in &input_states_for_content {
-                        container = container.child(
-                            Input::new(input_state).w_full()
-                        );
-                    }
-                    content.child(container)
                 })
         });
     }

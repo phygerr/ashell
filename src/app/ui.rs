@@ -1780,7 +1780,8 @@ impl Ashell {
                                                         .font_weight(FontWeight::SEMIBOLD)
                                                         .text_color(cx.theme().muted_foreground)
                                                         .px_1()
-                                                        .child(t!("default_group")),
+                                                        .child(t!("default_group"))
+                                                        .into_any_element(),
                                                 );
                                                 for session in default_sessions {
                                                     items.push(Self::render_session_card(
@@ -1870,7 +1871,8 @@ impl Ashell {
                                                         })
                                                         .with_size(Size::Small)
                                                         .text_color(cx.theme().muted_foreground),
-                                                    ),
+                                                    )
+                                                    .into_any_element(),
                                             );
 
                                             // Group sessions (if not collapsed)
@@ -2901,22 +2903,30 @@ impl Render for Ashell {
                 }
             }))
             .on_action(cx.listener(|this, _: &crate::Copy, window, cx| {
-                if let Some(text) = this.active_terminal_selection_text() {
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
-                    if let Some(active_id) = &this.active_tab {
-                        if let Some(tab) = this.tabs.iter_mut().find(|tab| &tab.id == active_id) {
-                            tab.clear_selection();
+                if window.focused(cx) == Some(this.focus_handle.clone()) {
+                    if let Some(text) = this.active_terminal_selection_text() {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                        if let Some(active_id) = &this.active_tab {
+                            if let Some(tab) = this.tabs.iter_mut().find(|tab| &tab.id == active_id) {
+                                tab.clear_selection();
+                            }
                         }
+                        window.prevent_default();
+                        cx.stop_propagation();
                     }
-                    window.prevent_default();
-                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
                 }
             }))
             .on_action(cx.listener(|this, _: &crate::Paste, window, cx| {
-                if let Some(clipboard) = cx.read_from_clipboard() {
-                    if let Some(text) = clipboard.text() {
-                        this.paste_into_terminal(&text, window, cx);
+                if window.focused(cx) == Some(this.focus_handle.clone()) {
+                    if let Some(clipboard) = cx.read_from_clipboard() {
+                        if let Some(text) = clipboard.text() {
+                            this.paste_into_terminal(&text, window, cx);
+                        }
                     }
+                } else {
+                    cx.propagate();
                 }
             }))
             .when(self.active_title_bar_style == crate::session::config::TitleBarStyle::Integrated, |this| {
@@ -3026,6 +3036,115 @@ impl Render for Ashell {
                                                 )
                                             },
                                         ),
+                                ),
+                        ),
+                )
+            })
+            .when_some(self.connection_progress.clone(), |this, progress| {
+                this.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .bottom_0()
+                        .bg(gpui::Hsla {
+                            h: 0.0,
+                            s: 0.0,
+                            l: 0.0,
+                            a: 0.48,
+                        })
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .w(px(420.))
+                                .p_5()
+                                .rounded_lg()
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .bg(cx.theme().popover)
+                                .shadow_lg()
+                                .child(
+                                    v_flex()
+                                        .gap_4()
+                                        .child(
+                                            Button::new("ssh-connect-progress")
+                                                .primary()
+                                                .loading(!progress.failed)
+                                                .label(progress.title.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .relative()
+                                                .min_h(px(0.))
+                                                .max_h(px(220.))
+                                                .child(
+                                                    div()
+                                                        .id("connection-progress-scroll")
+                                                        .max_h(px(220.))
+                                                        .overflow_hidden()
+                                                        .overflow_y_scroll()
+                                                        .track_scroll(&self.connection_scroll_handle)
+                                                        .child(
+                                                            v_flex().gap_2().children(
+                                                                progress.lines.iter().cloned().map(|line| {
+                                                                    div()
+                                                                        .text_size(rems(1.0))
+                                                                        .text_color(if progress.failed {
+                                                                            cx.theme().danger
+                                                                        } else {
+                                                                            cx.theme().muted_foreground
+                                                                        })
+                                                                        .child(line)
+                                                                }),
+                                                            ),
+                                                        )
+                                                )
+                                                .child(
+                                                    div()
+                                                        .absolute()
+                                                        .top_0()
+                                                        .right_0()
+                                                        .bottom_0()
+                                                        .w(px(16.))
+                                                        .child(
+                                                            Scrollbar::vertical(&self.connection_scroll_handle)
+                                                                .scrollbar_show(ScrollbarShow::Scrolling)
+                                                        )
+                                                )
+                                        )
+                                        .when(progress.failed, |this| {
+                                            this.child(
+                                                h_flex()
+                                                    .justify_end()
+                                                    .gap_2()
+                                                    .child(
+                                                        Button::new("ssh-connect-progress-retry")
+                                                            .primary()
+                                                            .label(t!("retry").to_string())
+                                                            .on_click(cx.listener(
+                                                                |this, _, _, cx| {
+                                                                    this.retry_connection_progress(
+                                                                        cx,
+                                                                    )
+                                                                },
+                                                            )),
+                                                    )
+                                                    .child(
+                                                        Button::new("ssh-connect-progress-close")
+                                                            .label(t!("cancel").to_string())
+                                                            .on_click(cx.listener(
+                                                                |this, _, _, cx| {
+                                                                    this.cancel_connection_progress(
+                                                                        cx,
+                                                                    )
+                                                                },
+                                                            )),
+                                                    ),
+                                            )
+                                        }),
                                 ),
                         ),
                 )

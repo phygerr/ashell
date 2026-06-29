@@ -117,7 +117,6 @@ pub fn spawn_local_terminal(
                     }
                     BackendCommand::Close => break,
                     BackendCommand::SampleMetrics => {}
-                    BackendCommand::PromptResponse(_) => {}
                 },
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     if let Ok(Some(status)) = child.try_wait() {

@@ -5,10 +5,10 @@ use gpui::{
     prelude::*,
 };
 use gpui_component::{
-    ActiveTheme as _, IconName, Sizable, WindowExt as _,
+    ActiveTheme as _, IconName, Sizable,
     button::{Button, ButtonVariants},
     h_flex,
-    input::{Input, InputState},
+    input::Input,
     kbd::Kbd,
     setting::{SettingField, SettingGroup, SettingItem},
 };
@@ -492,19 +492,21 @@ impl KeybindingsPage {
                                 .cursor_pointer()
                                 .on_mouse_down(
                                     MouseButton::Left,
-                                    window.listener_for(
-                                        &view3,
-                                        move |this, _, window, cx| {
-                                            this.editing_quick_input_idx = Some(idx);
-                                            if let Some(qi) = this.config.quick_inputs().get(idx) {
-                                                let text: gpui::SharedString = qi.text.clone().into();
-                                                this.quick_input_text_input.update(cx, |state, cx| {
-                                                    state.set_value(text, window, cx);
-                                                });
-                                            }
-                                            cx.notify();
-                                        },
-                                    ),
+                                    {
+                                        let view3 = view3.clone();
+                                        move |_, window, cx| {
+                                            view3.update(cx, |this, cx| {
+                                                this.editing_quick_input_idx = Some(idx);
+                                                if let Some(qi) = this.config.quick_inputs().get(idx) {
+                                                    let text: gpui::SharedString = qi.text.clone().into();
+                                                    this.quick_input_text_input.update(cx, |state, cx| {
+                                                        state.set_value(text, window, cx);
+                                                    });
+                                                }
+                                                cx.notify();
+                                            });
+                                        }
+                                    },
                                 )
                                 .child(qi_text.clone())
                                 .into_any_element()

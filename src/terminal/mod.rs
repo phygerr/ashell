@@ -25,35 +25,16 @@ pub enum TabKind {
     Ssh,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PromptType {
-    KeyboardInteractive,
-    Passphrase,
-}
-
-#[derive(Debug, Clone)]
-pub struct PromptInfo {
-    pub prompt: String,
-    pub echo: bool,
-}
-
 #[derive(Debug)]
 pub enum BackendCommand {
     Input(Vec<u8>),
     Resize { cols: u16, rows: u16 },
     SampleMetrics,
     Close,
-    PromptResponse(Vec<String>),
 }
 
 #[derive(Debug, Clone)]
 pub enum BackendEvent {
-    PromptRequest {
-        tab_id: String,
-        prompt_type: PromptType,
-        instruction: String,
-        prompts: Vec<PromptInfo>,
-    },
     Output {
         tab_id: String,
         bytes: Vec<u8>,
@@ -490,12 +471,22 @@ impl TerminalTab {
     }
 
     pub fn paste_text(&mut self, text: &str) {
+        let bracketed = self.term.mode().contains(TermMode::BRACKETED_PASTE);
         let paste_text = text
             .replace('\x1b', "")
             .replace("\r\n", "\r")
             .replace('\n', "\r");
 
-        self.send_backend(BackendCommand::Input(paste_text.into_bytes()));
+        let mut bytes = Vec::new();
+        if bracketed {
+            bytes.extend_from_slice(b"\x1b[200~");
+        }
+        bytes.extend_from_slice(paste_text.as_bytes());
+        if bracketed {
+            bytes.extend_from_slice(b"\x1b[201~");
+        }
+
+        self.send_backend(BackendCommand::Input(bytes));
     }
 }
 

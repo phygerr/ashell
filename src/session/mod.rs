@@ -111,7 +111,6 @@ impl Ashell {
                 }
                 Session::key(host, port, user, key_path, key_inline, passphrase)
             }
-            AuthMethod::KeyboardInteractive => Session::keyboard_interactive(host, port, user),
         };
         session.name = name;
         if let Some(id) = existing_id {
@@ -199,7 +198,11 @@ impl Ashell {
             window,
             cx,
         );
-        self.ssh_proxy_type = session.proxy_type.clone();
+        self.ssh_proxy_type = if session.proxy_type.is_empty() {
+            "none".to_string()
+        } else {
+            session.proxy_type.clone()
+        };
         Self::set_input_value(&self.proxy_host_input, session.proxy_host.clone(), window, cx);
         Self::set_input_value(
             &self.proxy_port_input,
@@ -494,6 +497,12 @@ impl Ashell {
             self.events_tx.clone(),
         ));
         self.active_tab = Some(id.clone());
+        self.connection_progress = Some(crate::app::ConnectionProgress {
+            tab_id: id.clone(),
+            title: rust_i18n::t!("connecting").into(),
+            lines: vec![rust_i18n::t!("starting_connection").into()],
+            failed: false,
+        });
         self.pane_root = PaneLayout::Single(id.clone());
         self.focused_pane_path = vec![];
         let group_id = Uuid::new_v4().to_string();

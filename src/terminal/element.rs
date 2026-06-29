@@ -375,7 +375,7 @@ impl TerminalElement {
                 selection_contains(selection, render_cell.row, render_cell.col)
             });
             let bg = color_to_hsla(cell.bg, false, cx);
-            if selected || !is_default_bg(cell.bg) {
+            if selected || !is_default_bg(cell.bg) || cell.flags.contains(Flags::INVERSE) {
                 rects.push(LayoutRect {
                     row: render_cell.row,
                     col: render_cell.col,

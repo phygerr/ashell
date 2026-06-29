@@ -197,7 +197,6 @@ pub(crate) enum DialogKind {
     SessionSelector,
     Transfers,
     NewSsh,
-    PromptRequest,
 }
 
 pub(crate) struct Ashell {
@@ -243,6 +242,7 @@ pub(crate) struct Ashell {
     pub(crate) dark_theme_name: SharedString,
     pub(crate) ui_font_size: f32,
     pub(crate) terminal_font_size: f32,
+    pub(crate) terminal_zoom_accumulator: f32,
     pub(crate) ui_font_family: SharedString,
     pub(crate) terminal_font_family: SharedString,
     pub(crate) tabs: Vec<TerminalTab>,
@@ -259,6 +259,8 @@ pub(crate) struct Ashell {
     pub(crate) tabs_scroll_handle: gpui::ScrollHandle,
     pub(crate) selector_scroll_handle: gpui::ScrollHandle,
     pub(crate) saved_scroll_handle: gpui::ScrollHandle,
+    pub(crate) connection_scroll_handle: gpui::ScrollHandle,
+    pub(crate) connection_progress: Option<ConnectionProgress>,
     pub(crate) pending_sftp_path_sync: Option<String>,
     pub(crate) sftp_context_menu: Option<SftpContextMenuState>,
     pub(crate) sftp_creating_folder: bool,
@@ -327,6 +329,14 @@ pub(crate) enum SelectorEntry {
     Local,
     NewSsh,
     Saved(String),
+}
+
+#[derive(Clone)]
+pub(crate) struct ConnectionProgress {
+    pub(crate) tab_id: String,
+    pub(crate) title: SharedString,
+    pub(crate) lines: Vec<SharedString>,
+    pub(crate) failed: bool,
 }
 
 #[derive(Clone)]
@@ -596,6 +606,7 @@ impl Ashell {
             dark_theme_name,
             ui_font_size: config.ui_font_size(),
             terminal_font_size: config.terminal_font_size(),
+            terminal_zoom_accumulator: 0.0,
             cursor_style: config.cursor_style(),
             ui_font_family,
             terminal_font_family,
@@ -616,6 +627,8 @@ impl Ashell {
             tabs_scroll_handle: gpui::ScrollHandle::new(),
             selector_scroll_handle: gpui::ScrollHandle::new(),
             saved_scroll_handle: gpui::ScrollHandle::new(),
+            connection_scroll_handle: gpui::ScrollHandle::new(),
+            connection_progress: None,
             pending_sftp_path_sync: Some("/".into()),
             sftp_context_menu: None,
             sftp_creating_folder: false,
@@ -686,7 +699,7 @@ impl Ashell {
 
         this.apply_theme_preferences(window, cx);
         // this.open_local(cx);
-        this.start_event_pump(window, cx);
+        this.start_event_pump(cx);
         this
     }
 
@@ -748,20 +761,18 @@ impl Ashell {
         cx.notify();
     }
 
-    pub(crate) fn start_event_pump(&self, window: &mut Window, cx: &mut Context<Self>) {
-        cx.spawn_in(window, async move |this, mut cx| {
+    pub(crate) fn start_event_pump(&self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
             let mut idle_frames = 0u32;
             let mut last_blink_time = std::time::Instant::now();
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(16))
                     .await;
-                let mut changed = false;
-                let mut system_sampled = false;
-                let update_res = gpui::AsyncWindowContext::update(&mut cx, |window, cx| {
-                    let _ = this.update(cx, |this, cx| {
-                        changed = this.drain_backend_events(window, cx);
-                        system_sampled = this.sample_system_if_due();
+                if this
+                    .update(cx, |this, cx| {
+                        let changed = this.drain_backend_events();
+                        let system_sampled = this.sample_system_if_due();
                         this.sync_theme_if_due(cx);
                         let is_blinking = matches!(
                             this.cursor_style,
@@ -783,9 +794,9 @@ impl Ashell {
                                 idle_frames = 0;
                             }
                         }
-                    });
-                });
-                if update_res.is_err() {
+                    })
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -793,7 +804,7 @@ impl Ashell {
         .detach();
     }
 
-    pub(crate) fn drain_backend_events(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn drain_backend_events(&mut self) -> bool {
         let mut changed = false;
         let mut transfers_changed = false;
         while let Ok(event) = self.events_rx.try_recv() {
@@ -810,6 +821,14 @@ impl Ashell {
                         tab.backend_initialized = true;
                         tab.status = text.clone();
                     }
+                    if let Some(progress) = self.connection_progress.as_mut() {
+                        if progress.tab_id == tab_id {
+                            progress.lines.push(text.clone().into());
+                            let _idx = progress.lines.len().saturating_sub(1);
+                            self.connection_scroll_handle
+                                .set_offset(gpui::point(px(0.), px(-99999.0)));
+                        }
+                    }
                     self.status = text.into();
                 }
                 BackendEvent::Connected { tab_id } => {
@@ -820,21 +839,13 @@ impl Ashell {
                     }
                     self.sync_system_tab_to_active_group();
                     self.request_active_system_snapshot();
-                }
-                BackendEvent::PromptRequest {
-                    tab_id,
-                    prompt_type,
-                    instruction,
-                    prompts,
-                } => {
-                    self.show_interactive_prompt_dialog(
-                        tab_id,
-                        prompt_type,
-                        instruction,
-                        prompts,
-                        window,
-                        cx,
-                    );
+                    if self
+                        .connection_progress
+                        .as_ref()
+                        .is_some_and(|progress| progress.tab_id == tab_id && !progress.failed)
+                    {
+                        self.connection_progress = None;
+                    }
                 }
                 BackendEvent::SftpEntries {
                     tab_id,
@@ -917,6 +928,16 @@ impl Ashell {
                     }
                     if self.system_tab_id.as_deref() == Some(tab_id.as_str()) {
                         self.system_status = Some(reason.clone().into());
+                    }
+                    if let Some(progress) = self.connection_progress.as_mut() {
+                        if progress.tab_id == tab_id {
+                            progress.lines.push(reason.clone().into());
+                            let _idx = progress.lines.len().saturating_sub(1);
+                            self.connection_scroll_handle
+                                .set_offset(gpui::point(px(0.), px(-99999.0)));
+                            progress.title = t!("connection_failed").into();
+                            progress.failed = true;
+                        }
                     }
                     self.status = reason.into();
                 }
@@ -1087,6 +1108,97 @@ impl Ashell {
     pub(crate) fn remove_transfer(&mut self, transfer_id: &str, cx: &mut Context<Self>) {
         self.transfers.retain(|t| t.info.id != transfer_id);
         self.config.set_transfers(self.transfers.clone());
+        cx.notify();
+    }
+
+    pub(crate) fn retry_connection_progress(&mut self, cx: &mut Context<Self>) {
+        let Some(progress) = self.connection_progress.clone() else {
+            return;
+        };
+        self.connection_progress = None;
+        let mut retry_tabs = Vec::new();
+        for (ix, tab) in self.tabs.iter().enumerate() {
+            if !tab.connected && tab.session.is_some() && tab.id == progress.tab_id {
+                retry_tabs.push((ix, tab.id.clone(), tab.session.clone().unwrap()));
+            }
+        }
+
+        if retry_tabs.is_empty() {
+            cx.notify();
+            return;
+        }
+
+        for (ix, tab_id, session) in retry_tabs {
+            // Close old backend
+            self.tabs[ix].send_backend(crate::terminal::BackendCommand::Close);
+
+            // Spawn new backend
+            let backend = crate::backend::ssh::spawn_ssh_terminal(
+                self.runtime.handle(),
+                tab_id.clone(),
+                session.clone(),
+                self.tabs[ix].cols,
+                self.tabs[ix].rows,
+                self.events_tx.clone(),
+            );
+
+            // Replace tab state
+            self.tabs[ix].set_backend(backend);
+            self.tabs[ix].connected = false;
+            self.tabs[ix].status = "connecting".into();
+            self.tabs[ix].disconnected_reason = None;
+            self.tabs[ix].backend_initialized = false;
+
+            // Restart SFTP for the group containing this tab
+            if let Some(group) = self
+                .tab_groups
+                .iter()
+                .find(|g| g.pane_root.contains(&tab_id))
+            {
+                let group_id = group.id.clone();
+                let group_session = self
+                    .tabs
+                    .iter()
+                    .find(|t| group.pane_root.contains(&t.id) && t.session.is_some())
+                    .and_then(|t| t.session.clone());
+
+                if let Some(session) = group_session {
+                    if let Some(old_handle) = self.sftp_handles.remove(&group_id) {
+                        old_handle.close();
+                    }
+                    let sftp_handle = crate::sftp::spawn_sftp(
+                        self.runtime.handle(),
+                        group_id.clone(),
+                        session,
+                        self.events_tx.clone(),
+                    );
+                    self.sftp_handles.insert(group_id.clone(), sftp_handle);
+
+                    if let Some(group) = self.tab_groups.iter_mut().find(|g| g.id == group_id) {
+                        if let Some(sftp) = group.sftp.as_mut() {
+                            sftp.status = rust_i18n::t!("sftp_connecting").to_string();
+                        }
+                    }
+                }
+            }
+        }
+
+        self.connection_progress = Some(ConnectionProgress {
+            tab_id: progress.tab_id.clone(),
+            title: t!("connecting").into(),
+            lines: vec![t!("starting_connection").into()],
+            failed: false,
+        });
+        self.status = "ssh tabs retrying".into();
+        cx.notify();
+    }
+
+    pub(crate) fn cancel_connection_progress(&mut self, cx: &mut Context<Self>) {
+        if let Some(progress) = &self.connection_progress {
+            let tab_id = progress.tab_id.clone();
+            self.connection_progress = None;
+            self.handle_tab_close(tab_id);
+        }
         cx.notify();
     }
 
