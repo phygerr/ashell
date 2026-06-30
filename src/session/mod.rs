@@ -652,6 +652,7 @@ impl Ashell {
                     let view = view.clone();
                     let name_input = name_input.clone();
                     let color_input = color_input.clone();
+                    let gid = gid.clone();
                     move |_, _, cx| {
                         view.update(cx, |this, cx| {
                             let name = name_input.read(cx).value().trim().to_string();
