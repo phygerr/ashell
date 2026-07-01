@@ -1836,8 +1836,7 @@ impl Ashell {
                                                     .gap_1()
                                                     .px_1()
                                                     .cursor_pointer()
-                                                    .on_mouse_down(
-                                                        MouseButton::Left,
+                                                    .on_click(
                                                         cx.listener(move |this, _, _, cx| {
                                                             this.config.toggle_session_group(&group_id);
                                                             let _ = this.config.save();

@@ -441,7 +441,6 @@ impl KeybindingsPage {
                     let view = view.clone();
                     move |_, _window, cx| {
                         let view2 = view.clone();
-                        let is_editing = view.read(cx).editing_quick_input_idx == Some(idx);
 
                         // Keystroke button
                         let key_btn: gpui::AnyElement = Button::new(gpui::SharedString::from(format!("qi-key-{idx}")))
@@ -461,49 +460,20 @@ impl KeybindingsPage {
                             })
                             .into_any_element();
 
-                        // Text content area: Input when editing, clickable label otherwise
-                        let text_area: gpui::AnyElement = if is_editing {
-                            let input_entity = view.read(cx).quick_input_text_input.clone();
-                            let view3 = view.clone();
-                            // Wrap Input in a div so on_mouse_down_out can detect clicks outside
-                            div()
-                                .flex_1()
-                                .on_mouse_down_out(move |_, _, cx| {
-                                    view3.update(cx, |this, cx| {
-                                        if let Some(edit_idx) = this.editing_quick_input_idx {
-                                            let text = this.quick_input_text_input.read(cx).value().to_string();
-                                            this.config.update_quick_input_text(edit_idx, &text);
-                                            this.editing_quick_input_idx = None;
-                                            if let Err(err) = this.config.save() {
-                                                tracing::error!("failed to save quick input text: {err:#}");
-                                            }
-                                            cx.notify();
-                                        }
-                                    });
-                                })
-                                .child(Input::new(&input_entity).h(px(100.)).w_full())
-                                .into_any_element()
-                        } else {
+                        // Text content area: clickable label that opens dialog for editing
+                        let text_area: gpui::AnyElement = {
                             let view3 = view.clone();
                             div()
                                 .flex_1()
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground)
                                 .cursor_pointer()
-                                .on_mouse_down(
-                                    MouseButton::Left,
+                                .on_click(
                                     {
                                         let view3 = view3.clone();
                                         move |_, window, cx| {
                                             view3.update(cx, |this, cx| {
-                                                this.editing_quick_input_idx = Some(idx);
-                                                if let Some(qi) = this.config.quick_inputs().get(idx) {
-                                                    let text: gpui::SharedString = qi.text.clone().into();
-                                                    this.quick_input_text_input.update(cx, |state, cx| {
-                                                        state.set_value(text, window, cx);
-                                                    });
-                                                }
-                                                cx.notify();
+                                                this.show_quick_input_editor_dialog(idx, window, cx);
                                             });
                                         }
                                     },

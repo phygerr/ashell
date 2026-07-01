@@ -139,7 +139,10 @@ impl Ashell {
             tracing::warn!("failed to save config: {err:#}");
         }
 
-        self.open_ssh_session(session, cx);
+        // Only connect when creating a new session, not when editing
+        if self.editing_session_id.is_none() {
+            self.open_ssh_session(session, cx);
+        }
         self.editing_session_id = None;
         self.active_dialog = None;
         window.close_dialog(cx);
@@ -598,6 +601,70 @@ impl Ashell {
         cx.notify();
     }
 
+    pub(crate) fn show_new_group_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("group_name")));
+        let color_input = cx.new(|cx| InputState::new(window, cx).default_value("#6CB4EE".to_string()).placeholder(t!("group_color")));
+
+        let view = cx.entity();
+        window.open_dialog(cx, move |dialog: Dialog, _window, _cx| {
+            dialog
+                .title(t!("new_group"))
+                .w(px(400.))
+                .overlay_closable(true)
+                .on_close({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |this, cx| {
+                            this.active_dialog = None;
+                            cx.notify();
+                        });
+                    }
+                })
+                .content({
+                    let name_input = name_input.clone();
+                    let color_input = color_input.clone();
+                    move |content, _window, _cx| {
+                        content.child(
+                            v_flex()
+                                .gap_3()
+                                .child(
+                                    v_flex()
+                                        .gap_1()
+                                        .child(div().text_sm().child(t!("group_name")))
+                                        .child(Input::new(&name_input)),
+                                )
+                                .child(
+                                    v_flex()
+                                        .gap_1()
+                                        .child(div().text_sm().child(t!("group_color")))
+                                        .child(Input::new(&color_input)),
+                                ),
+                        )
+                    }
+                })
+                .on_ok({
+                    let view = view.clone();
+                    let name_input = name_input.clone();
+                    let color_input = color_input.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |this, cx| {
+                            let name = name_input.read(cx).value().trim().to_string();
+                            let color = color_input.read(cx).value().trim().to_string();
+                            let name = if name.is_empty() { t!("new_group").to_string() } else { name };
+                            let color = if color.is_empty() { "#6CB4EE".to_string() } else { color };
+                            this.config.add_session_group(name, color);
+                            if let Err(err) = this.config.save() {
+                                tracing::warn!("failed to save config: {err:#}");
+                            }
+                            this.active_dialog = None;
+                            cx.notify();
+                        });
+                        true
+                    }
+                })
+        });
+    }
+
     pub(crate) fn show_edit_group_dialog(
         &mut self,
         group_id: String,
@@ -661,6 +728,60 @@ impl Ashell {
                             let name = if name.is_empty() { t!("new_group").to_string() } else { name };
                             this.update_session_group(gid.clone(), name, color, cx);
                             this.active_dialog = None;
+                            cx.notify();
+                        });
+                        true
+                    }
+                })
+        });
+    }
+
+    pub(crate) fn show_quick_input_editor_dialog(
+        &mut self,
+        idx: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let text = self.config.quick_inputs().get(idx).map(|qi| qi.text.clone()).unwrap_or_default();
+        let text_input = cx.new(|cx| InputState::new(window, cx).multi_line(true).rows(8).default_value(text));
+
+        let view = cx.entity();
+        window.open_dialog(cx, move |dialog: Dialog, _window, _cx| {
+            dialog
+                .title(t!("quick_input_text_placeholder"))
+                .w(px(500.))
+                .overlay_closable(true)
+                .on_close({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |this, cx| {
+                            this.editing_quick_input_idx = None;
+                            this.active_dialog = None;
+                            cx.notify();
+                        });
+                    }
+                })
+                .content({
+                    let text_input = text_input.clone();
+                    move |content, _window, _cx| {
+                        content.child(
+                            v_flex()
+                                .gap_3()
+                                .child(Input::new(&text_input).h(px(200.)).w_full()),
+                        )
+                    }
+                })
+                .on_ok({
+                    let view = view.clone();
+                    let text_input = text_input.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |this, cx| {
+                            let text = text_input.read(cx).value().to_string();
+                            this.config.update_quick_input_text(idx, &text);
+                            this.editing_quick_input_idx = None;
+                            if let Err(err) = this.config.save() {
+                                tracing::error!("failed to save quick input text: {err:#}");
+                            }
                             cx.notify();
                         });
                         true
