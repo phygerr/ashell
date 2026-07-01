@@ -1817,6 +1817,7 @@ impl Ashell {
                                                     ix += 1;
                                                 }
                                             }
+                                            }
                                         }
 
                                         // Render each group
