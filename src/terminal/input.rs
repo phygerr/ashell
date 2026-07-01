@@ -350,7 +350,7 @@ impl Ashell {
                 if let Some(text) = clipboard_item.text() {
                     if !text.is_empty() {
                         self.paste_into_terminal(&text, window, cx);
-                }
+                    }
             }
         }
     }
