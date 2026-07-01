@@ -45,14 +45,11 @@ impl Ashell {
                 }
                 let text = self.config.quick_inputs().get(idx).map(|qi| qi.text.as_str()).unwrap_or("");
                 if !text.is_empty() {
-                    let active_id = self.active_tab.clone();
-                    if let Some(active_id) = active_id {
                         let text = text.replace('\n', "\r");
                         let mut bytes = text.into_bytes();
                         bytes.push(b'\r');
                         self.send_terminal_input(bytes, window, cx);
                         return;
-                    }
                 }
             }
         }
@@ -340,11 +337,8 @@ impl Ashell {
             if !text.is_empty() {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
 
-                let active_id = self.active_tab.clone();
-                if let Some(active_id) = active_id {
                     if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) {
                         tab.clear_selection();
-                    }
                 }
                 cx.notify();
                 handled = true;
@@ -356,7 +350,6 @@ impl Ashell {
                 if let Some(text) = clipboard_item.text() {
                     if !text.is_empty() {
                         self.paste_into_terminal(&text, window, cx);
-                    }
                 }
             }
         }
