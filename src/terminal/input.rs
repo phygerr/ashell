@@ -47,10 +47,9 @@ impl Ashell {
                 if !text.is_empty() {
                     let active_id = self.active_tab.clone();
                     if let Some(active_id) = active_id {
-                        let text = text.replace('
-', "");
+                        let text = text.replace('\n', "\r");
                         let mut bytes = text.into_bytes();
-                        bytes.push(b'');
+                        bytes.push(b'\r');
                         self.send_terminal_input(bytes, window, cx);
                         return;
                     }
