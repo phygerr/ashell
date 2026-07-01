@@ -1,6 +1,6 @@
 use gpui::{
     Action as _, App, Entity, InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent,
-    Keystroke, MouseButton, Unbind,
+    Keystroke, MouseButton, Unbind, px,
     div,
     prelude::*,
 };
@@ -481,7 +481,7 @@ impl KeybindingsPage {
                                         }
                                     });
                                 })
-                                .child(Input::new(&input_entity).w_full())
+                                .child(Input::new(&input_entity).h(px(100.)).w_full())
                                 .into_any_element()
                         } else {
                             let view3 = view.clone();

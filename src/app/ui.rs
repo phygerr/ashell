@@ -1775,15 +1775,38 @@ impl Ashell {
                                         if let Some(default_sessions) = grouped.get("") {
                                             if !default_sessions.is_empty() {
                                                 items.push(
-                                                    div()
-                                                        .text_size(rems(0.85))
-                                                        .font_weight(FontWeight::SEMIBOLD)
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .px_1()
-                                                        .child(t!("default_group"))
-                                                        .into_any_element(),
+                                                h_flex()
+                                                    .items_center()
+                                                    .gap_1()
+                                                    .px_1()
+                                                    .cursor_pointer()
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(move |this, _, _, cx| {
+                                                            this.default_group_collapsed = !this.default_group_collapsed;
+                                                            cx.notify();
+                                                        }),
+                                                    )
+                                                    .child(
+                                                        Icon::new(if self.default_group_collapsed {
+                                                            IconName::ChevronRight
+                                                        } else {
+                                                            IconName::ChevronDown
+                                                        })
+                                                        .with_size(Size::Small)
+                                                        .text_color(cx.theme().muted_foreground),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(rems(0.85))
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                            .text_color(cx.theme().muted_foreground)
+                                                            .child(t!("default_group")),
+                                                    )
+                                                    .into_any_element(),
                                                 );
-                                                for session in default_sessions {
+                                                if !self.default_group_collapsed {
+                                                    for session in default_sessions {
                                                     items.push(Self::render_session_card(
                                                         &self,
                                                         session,
