@@ -6,8 +6,8 @@ use gpui::{
 };
 use gpui_component::{
     Theme, WindowExt as _,
+    button::{Button, ButtonVariants as _},
     dialog::Dialog,
-    button::Button,
     h_flex, v_flex,
     input::{Input, InputState},
 };
