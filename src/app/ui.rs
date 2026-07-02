@@ -1557,32 +1557,10 @@ impl Ashell {
         let is_active = active_session_id.as_deref() == Some(session.id.as_str());
         let name = session.name.clone();
         let detail = self.session_detail(session);
+        let view = cx.entity();
         div()
-            .id(("saved-connect", ix))
-            .w_full()
-            .p_2()
-            .rounded_md()
-            .border_1()
-            .border_color(if is_active {
-                cx.theme().primary
-            } else {
-                cx.theme().border
-            })
-            .bg(if is_active {
-                cx.theme().tab_active
-            } else {
-                cx.theme().muted
-            })
-            .cursor_pointer()
-            .hover(|this| this.bg(cx.theme().secondary))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, _, _, cx| {
-                    this.connect_saved_session(connect_id.clone(), cx)
-                }),
-            )
             .context_menu({
-                let view = cx.entity();
+                let view = view.clone();
                 move |menu, window, _| {
                     let edit_value = edit_id.clone();
                     let clone_value = edit_id.clone();
@@ -1612,6 +1590,31 @@ impl Ashell {
                     )
                 }
             })
+            .child(
+                div()
+                    .id(("saved-connect", ix))
+                    .w_full()
+                    .p_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if is_active {
+                        cx.theme().primary
+                    } else {
+                        cx.theme().border
+                    })
+                    .bg(if is_active {
+                        cx.theme().tab_active
+                    } else {
+                        cx.theme().muted
+                    })
+                    .cursor_pointer()
+                    .hover(|this| this.bg(cx.theme().secondary))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.connect_saved_session(connect_id.clone(), cx)
+                        }),
+                    )
             .child(
                 v_flex()
                     .gap_1()
@@ -1739,12 +1742,8 @@ impl Ashell {
                             .icon(IconName::Plus)
                             .tooltip(t!("new_group").to_string())
                             .on_click(
-                                cx.listener(|this, _, _, cx| {
-                                    this.add_session_group(
-                                        t!("new_group").to_string(),
-                                        "#6CB4EE".to_string(),
-                                        cx,
-                                    );
+                                cx.listener(|this, _, window, cx| {
+                                    this.show_new_group_dialog(window, cx);
                                 }),
                             ),
                     ),
@@ -1831,19 +1830,7 @@ impl Ashell {
                                             let group_name = group.name.clone();
                                             let view = cx.entity();
                                             items.push(
-                                                h_flex()
-                                                    .items_center()
-                                                    .gap_1()
-                                                    .px_1()
-                                                    .on_mouse_down(
-                                                        MouseButton::Left,
-                                                        cx.listener(move |this, _, _, cx| {
-                                                            this.config.toggle_session_group(&group_id);
-                                                            let _ = this.config.save();
-                                                            cx.notify();
-                                                        }),
-                                                    )
-                                                    .cursor_pointer()
+                                                div()
                                                     .context_menu({
                                                         let view = view.clone();
                                                         let gid = group.id.clone();
@@ -1877,30 +1864,44 @@ impl Ashell {
                                                         }
                                                     })
                                                     .child(
-                                                        div()
-                                                            .w(px(8.))
-                                                            .h(px(8.))
-                                                            .rounded_full()
-                                                            .bg(cx.theme().primary),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .text_size(rems(0.85))
-                                                            .font_weight(FontWeight::SEMIBOLD)
-                                                            .text_color(cx.theme().muted_foreground)
-                                                            .child(group_name),
-                                                    )
-                                                    .child(
-                                                        Icon::new(if is_collapsed {
-                                                            IconName::ChevronRight
-                                                        } else {
-                                                            IconName::ChevronDown
-                                                        })
-                                                        .with_size(Size::Small)
-                                                        .text_color(cx.theme().muted_foreground),
+                                                        h_flex()
+                                                            .items_center()
+                                                            .gap_1()
+                                                            .px_1()
+                                                            .on_mouse_down(
+                                                                MouseButton::Left,
+                                                                cx.listener(move |this, _, _, cx| {
+                                                                    this.config.toggle_session_group(&group_id);
+                                                                    let _ = this.config.save();
+                                                                    cx.notify();
+                                                                }),
+                                                            )
+                                                            .cursor_pointer()
+                                                            .child(
+                                                                div()
+                                                                    .w(px(8.))
+                                                                    .h(px(8.))
+                                                                    .rounded_full()
+                                                                    .bg(cx.theme().primary),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .text_size(rems(0.85))
+                                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                                    .text_color(cx.theme().muted_foreground)
+                                                                    .child(group_name),
+                                                            )
+                                                            .child(
+                                                                Icon::new(if is_collapsed {
+                                                                    IconName::ChevronRight
+                                                                } else {
+                                                                    IconName::ChevronDown
+                                                                })
+                                                                .with_size(Size::Small)
+                                                                .text_color(cx.theme().muted_foreground),
+                                                            ),
                                                     )
                                                     .into_any_element(),
-                                            );
 
                                             // Group sessions (if not collapsed)
                                             if !is_collapsed {

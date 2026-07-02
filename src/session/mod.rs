@@ -7,7 +7,8 @@ use gpui::{
 use gpui_component::{
     Theme, WindowExt as _,
     dialog::Dialog,
-    v_flex,
+    button::Button,
+    h_flex, v_flex,
     input::{Input, InputState},
 };
 use rust_i18n::t;
@@ -601,7 +602,6 @@ impl Ashell {
         cx.notify();
     }
 
-    #[allow(dead_code)]
     pub(crate) fn show_new_group_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let name_input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("group_name")));
         let color_input = cx.new(|cx| InputState::new(window, cx).default_value("#6CB4EE".to_string()).placeholder(t!("group_color")));
@@ -611,7 +611,7 @@ impl Ashell {
             dialog
                 .title(t!("new_group"))
                 .w(px(400.))
-                .overlay_closable(true)
+                .overlay_closable(false)
                 .on_close({
                     let view = view.clone();
                     move |_, _, cx| {
@@ -624,6 +624,7 @@ impl Ashell {
                 .content({
                     let name_input = name_input.clone();
                     let color_input = color_input.clone();
+                    let view = view.clone();
                     move |content, _window, _cx| {
                         content.child(
                             v_flex()
@@ -639,28 +640,58 @@ impl Ashell {
                                         .gap_1()
                                         .child(div().text_sm().child(t!("group_color")))
                                         .child(Input::new(&color_input)),
-                                ),
+                                )
+                                .child({
+                                    let view = view.clone();
+                                    h_flex()
+                                        .w_full()
+                                        .justify_end()
+                                        .gap_2()
+                                        .child(
+                                            Button::new("cancel-new-group")
+                                                .ghost()
+                                                .label(t!("cancel").to_string())
+                                                .on_click(move |_, window, cx| {
+                                                    view.update(cx, |this, cx| {
+                                                        this.active_dialog = None;
+                                                        cx.notify();
+                                                    });
+                                                    window.close_dialog(cx);
+                                                }),
+                                        )
+                                        .child(
+                                            Button::new("confirm-new-group")
+                                                .primary()
+                                                .label(t!("confirm").to_string())
+                                                .on_click({
+                                                    let view = view.clone();
+                                                    let name_input = name_input.clone();
+                                                    let color_input = color_input.clone();
+                                                    move |_, window, cx| {
+                                                        view.update(cx, |this, cx| {
+                                                            let name = name_input.read(cx).value().trim().to_string();
+                                                            if name.is_empty() {
+                                                                return;
+                                                            }
+                                                            // Check for duplicate group name
+                                                            if this.config.session_groups().iter().any(|g| g.name == name) {
+                                                                return;
+                                                            }
+                                                            let color = color_input.read(cx).value().trim().to_string();
+                                                            let color = if color.is_empty() { "#6CB4EE".to_string() } else { color };
+                                                            this.config.add_session_group(name, color);
+                                                            if let Err(err) = this.config.save() {
+                                                                tracing::warn!("failed to save config: {err:#}");
+                                                            }
+                                                            this.active_dialog = None;
+                                                            cx.notify();
+                                                        });
+                                                        window.close_dialog(cx);
+                                                    }
+                                                }),
+                                        )
+                                }),
                         )
-                    }
-                })
-                .on_ok({
-                    let view = view.clone();
-                    let name_input = name_input.clone();
-                    let color_input = color_input.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |this, cx| {
-                            let name = name_input.read(cx).value().trim().to_string();
-                            let color = color_input.read(cx).value().trim().to_string();
-                            let name = if name.is_empty() { t!("new_group").to_string() } else { name };
-                            let color = if color.is_empty() { "#6CB4EE".to_string() } else { color };
-                            this.config.add_session_group(name, color);
-                            if let Err(err) = this.config.save() {
-                                tracing::warn!("failed to save config: {err:#}");
-                            }
-                            this.active_dialog = None;
-                            cx.notify();
-                        });
-                        true
                     }
                 })
         });
@@ -751,7 +782,7 @@ impl Ashell {
             dialog
                 .title(t!("quick_input_text_placeholder"))
                 .w(px(500.))
-                .overlay_closable(true)
+                .overlay_closable(false)
                 .on_close({
                     let view = view.clone();
                     move |_, _, cx| {
@@ -764,28 +795,53 @@ impl Ashell {
                 })
                 .content({
                     let text_input = text_input.clone();
+                    let view = view.clone();
                     move |content, _window, _cx| {
                         content.child(
                             v_flex()
                                 .gap_3()
-                                .child(Input::new(&text_input).h(px(200.)).w_full()),
+                                .child(Input::new(&text_input).h(px(200.)).w_full())
+                                .child(
+                                    h_flex()
+                                        .w_full()
+                                        .justify_end()
+                                        .gap_2()
+                                        .child(
+                                            Button::new("cancel-quick-input")
+                                                .ghost()
+                                                .label(t!("cancel").to_string())
+                                                .on_click(move |_, window, cx| {
+                                                    view.update(cx, |this, cx| {
+                                                        this.editing_quick_input_idx = None;
+                                                        this.active_dialog = None;
+                                                        cx.notify();
+                                                    });
+                                                    window.close_dialog(cx);
+                                                }),
+                                        )
+                                        .child(
+                                            Button::new("confirm-quick-input")
+                                                .primary()
+                                                .label(t!("confirm").to_string())
+                                                .on_click({
+                                                    let view = view.clone();
+                                                    let text_input = text_input.clone();
+                                                    move |_, window, cx| {
+                                                        view.update(cx, |this, cx| {
+                                                            let text = text_input.read(cx).value().to_string();
+                                                            this.config.update_quick_input_text(idx, &text);
+                                                            this.editing_quick_input_idx = None;
+                                                            if let Err(err) = this.config.save() {
+                                                                tracing::error!("failed to save quick input text: {err:#}");
+                                                            }
+                                                            cx.notify();
+                                                        });
+                                                        window.close_dialog(cx);
+                                                    }
+                                                }),
+                                        ),
+                                ),
                         )
-                    }
-                })
-                .on_ok({
-                    let view = view.clone();
-                    let text_input = text_input.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |this, cx| {
-                            let text = text_input.read(cx).value().to_string();
-                            this.config.update_quick_input_text(idx, &text);
-                            this.editing_quick_input_idx = None;
-                            if let Err(err) = this.config.save() {
-                                tracing::error!("failed to save quick input text: {err:#}");
-                            }
-                            cx.notify();
-                        });
-                        true
                     }
                 })
         });
