@@ -642,7 +642,8 @@ impl Ashell {
                                         .child(Input::new(&color_input)),
                                 )
                                 .child({
-                                    let view = view.clone();
+                                    let cancel_view = view.clone();
+                                    let confirm_view = view.clone();
                                     h_flex()
                                         .w_full()
                                         .justify_end()
@@ -652,7 +653,7 @@ impl Ashell {
                                                 .ghost()
                                                 .label(t!("cancel").to_string())
                                                 .on_click(move |_, window, cx| {
-                                                    view.update(cx, |this, cx| {
+                                                    cancel_view.update(cx, |this, cx| {
                                                         this.active_dialog = None;
                                                         cx.notify();
                                                     });
@@ -664,7 +665,7 @@ impl Ashell {
                                                 .primary()
                                                 .label(t!("confirm").to_string())
                                                 .on_click({
-                                                    let view = view.clone();
+                                                    let view = confirm_view.clone();
                                                     let name_input = name_input.clone();
                                                     let color_input = color_input.clone();
                                                     move |_, window, cx| {
@@ -795,7 +796,8 @@ impl Ashell {
                 })
                 .content({
                     let text_input = text_input.clone();
-                    let view = view.clone();
+                    let cancel_view = view.clone();
+                    let confirm_view = view.clone();
                     move |content, _window, _cx| {
                         content.child(
                             v_flex()
@@ -811,7 +813,7 @@ impl Ashell {
                                                 .ghost()
                                                 .label(t!("cancel").to_string())
                                                 .on_click(move |_, window, cx| {
-                                                    view.update(cx, |this, cx| {
+                                                    cancel_view.update(cx, |this, cx| {
                                                         this.editing_quick_input_idx = None;
                                                         this.active_dialog = None;
                                                         cx.notify();
@@ -824,7 +826,7 @@ impl Ashell {
                                                 .primary()
                                                 .label(t!("confirm").to_string())
                                                 .on_click({
-                                                    let view = view.clone();
+                                                    let view = confirm_view.clone();
                                                     let text_input = text_input.clone();
                                                     move |_, window, cx| {
                                                         view.update(cx, |this, cx| {
