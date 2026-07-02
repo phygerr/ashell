@@ -9,7 +9,7 @@ use gpui::{
 
 use crate::{
     Ashell, TerminalBacktabKey, TerminalTabKey,
-    terminal::BackendCommand,
+    terminal::{BackendCommand, encode_key},
 };
 
 thread_local! {

@@ -466,7 +466,6 @@ impl KeybindingsPage {
                                 .flex_1()
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground)
-                                .cursor_pointer()
                                 .on_click(
                                     {
                                         let view3 = view3.clone();
@@ -477,6 +476,7 @@ impl KeybindingsPage {
                                         }
                                     },
                                 )
+                                .cursor_pointer()
                                 .child(qi_text.clone())
                                 .into_any_element()
                         };

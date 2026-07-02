@@ -1835,7 +1835,6 @@ impl Ashell {
                                                     .items_center()
                                                     .gap_1()
                                                     .px_1()
-                                                    .cursor_pointer()
                                                     .on_click(
                                                         cx.listener(move |this, _, _, cx| {
                                                             this.config.toggle_session_group(&group_id);
@@ -1843,6 +1842,7 @@ impl Ashell {
                                                             cx.notify();
                                                         }),
                                                     )
+                                                    .cursor_pointer()
                                                     .context_menu({
                                                         let view = view.clone();
                                                         let gid = group.id.clone();
