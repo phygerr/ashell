@@ -56,7 +56,6 @@ impl Ashell {
         }
 
 
-
         // Quick input: check if the keystroke matches a configured quick input
         // This runs early so quick inputs take priority over pane navigation, etc.
         if let Some(normalized) = crate::app::keybinding_recorder::normalize_recorded_keystroke(event) {
