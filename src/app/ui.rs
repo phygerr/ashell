@@ -1615,20 +1615,21 @@ impl Ashell {
                             this.connect_saved_session(connect_id.clone(), cx)
                         }),
                     )
-            .child(
-                v_flex()
-                    .gap_1()
                     .child(
-                        div()
-                            .text_size(rems(1.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(name),
-                    )
-                    .child(
-                        div()
-                            .text_size(rems(0.917))
-                            .text_color(cx.theme().muted_foreground)
-                            .child(detail),
+                        v_flex()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_size(rems(1.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(name),
+                            )
+                            .child(
+                                div()
+                                    .text_size(rems(0.917))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(detail),
+                            ),
                     ),
             )
             .into_any_element()
@@ -1902,6 +1903,7 @@ impl Ashell {
                                                             ),
                                                     )
                                                     .into_any_element(),
+                                            );
 
                                             // Group sessions (if not collapsed)
                                             if !is_collapsed {
