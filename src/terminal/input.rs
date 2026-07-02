@@ -45,6 +45,29 @@ impl Ashell {
                 }
                 let text = self.config.quick_inputs().get(idx).map(|qi| qi.text.as_str()).unwrap_or("");
                 if !text.is_empty() {
+                        let text = text.replace('
+', "");
+                        let mut bytes = text.into_bytes();
+                        bytes.push(b'');
+                        self.send_terminal_input(bytes, window, cx);
+                        return;
+                }
+            }
+        }
+
+
+
+        // Quick input: check if the keystroke matches a configured quick input
+        // This runs early so quick inputs take priority over pane navigation, etc.
+        if let Some(normalized) = crate::app::keybinding_recorder::normalize_recorded_keystroke(event) {
+            if let Some(idx) = self.config.quick_inputs().iter().position(|qi| qi.keystroke == normalized) {
+                // If this quick input is currently being edited in settings, save the text first
+                if self.editing_quick_input_idx == Some(idx) {
+                    let text = self.quick_input_text_input.read(cx).value().to_string();
+                    self.config.update_quick_input_text(idx, &text);
+                }
+                let text = self.config.quick_inputs().get(idx).map(|qi| qi.text.as_str()).unwrap_or("");
+                if !text.is_empty() {
                         let text = text.replace('\n', "\r");
                         let mut bytes = text.into_bytes();
                         bytes.push(b'\r');
