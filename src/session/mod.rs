@@ -812,13 +812,16 @@ impl Ashell {
                                             Button::new("cancel-quick-input")
                                                 .ghost()
                                                 .label(t!("cancel").to_string())
-                                                .on_click(move |_, window, cx| {
-                                                    cancel_view.update(cx, |this, cx| {
-                                                        this.editing_quick_input_idx = None;
-                                                        this.active_dialog = None;
-                                                        cx.notify();
-                                                    });
-                                                    window.close_dialog(cx);
+                                                .on_click({
+                                                    let view = cancel_view.clone();
+                                                    move |_, window, cx| {
+                                                        view.update(cx, |this, cx| {
+                                                            this.editing_quick_input_idx = None;
+                                                            this.active_dialog = None;
+                                                            cx.notify();
+                                                        });
+                                                        window.close_dialog(cx);
+                                                    }
                                                 }),
                                         )
                                         .child(
