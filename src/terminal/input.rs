@@ -129,7 +129,7 @@ impl Ashell {
             if let Some(clipboard) = cx.read_from_clipboard() {
                 if let Some(text) = clipboard.text() {
                     self.paste_into_terminal(&text, window, cx);
-                    return;
+                    }
                 }
             }
         }
@@ -351,9 +351,9 @@ impl Ashell {
                     if !text.is_empty() {
                         self.paste_into_terminal(&text, window, cx);
                     }
+                }
             }
         }
-    }
 
     pub(crate) fn begin_terminal_selection(
         &mut self,
