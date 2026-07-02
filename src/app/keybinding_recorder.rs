@@ -1,6 +1,6 @@
 use gpui::{
     Action as _, App, Entity, InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent,
-    Keystroke, MouseButton, Unbind, px,
+    Keystroke, StatefulInteractiveElement as _, Unbind,
     div,
     prelude::*,
 };
@@ -8,7 +8,6 @@ use gpui_component::{
     ActiveTheme as _, IconName, Sizable,
     button::{Button, ButtonVariants},
     h_flex,
-    input::Input,
     kbd::Kbd,
     setting::{SettingField, SettingGroup, SettingItem},
 };

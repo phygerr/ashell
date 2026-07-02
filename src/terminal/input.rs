@@ -9,7 +9,7 @@ use gpui::{
 
 use crate::{
     Ashell, TerminalBacktabKey, TerminalTabKey,
-    terminal::{BackendCommand, encode_key},
+    terminal::BackendCommand,
 };
 
 thread_local! {
@@ -45,28 +45,6 @@ impl Ashell {
                 }
                 let text = self.config.quick_inputs().get(idx).map(|qi| qi.text.as_str()).unwrap_or("");
                 if !text.is_empty() {
-                        let text = text.replace('
-', "");
-                        let mut bytes = text.into_bytes();
-                        bytes.push(b'');
-                        self.send_terminal_input(bytes, window, cx);
-                        return;
-                }
-            }
-        }
-
-
-        // Quick input: check if the keystroke matches a configured quick input
-        // This runs early so quick inputs take priority over pane navigation, etc.
-        if let Some(normalized) = crate::app::keybinding_recorder::normalize_recorded_keystroke(event) {
-            if let Some(idx) = self.config.quick_inputs().iter().position(|qi| qi.keystroke == normalized) {
-                // If this quick input is currently being edited in settings, save the text first
-                if self.editing_quick_input_idx == Some(idx) {
-                    let text = self.quick_input_text_input.read(cx).value().to_string();
-                    self.config.update_quick_input_text(idx, &text);
-                }
-                let text = self.config.quick_inputs().get(idx).map(|qi| qi.text.as_str()).unwrap_or("");
-                if !text.is_empty() {
                         let text = text.replace('\n', "\r");
                         let mut bytes = text.into_bytes();
                         bytes.push(b'\r');
@@ -75,8 +53,6 @@ impl Ashell {
                 }
             }
         }
-
-
 
         // Pane navigation: Alt + h/j/k/l
         if event.keystroke.modifiers.alt
@@ -151,7 +127,6 @@ impl Ashell {
             if let Some(clipboard) = cx.read_from_clipboard() {
                 if let Some(text) = clipboard.text() {
                     self.paste_into_terminal(&text, window, cx);
-                    }
                 }
             }
         }
@@ -359,8 +334,10 @@ impl Ashell {
             if !text.is_empty() {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
 
+                if let Some(active_id) = self.active_tab.clone() {
                     if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) {
                         tab.clear_selection();
+                    }
                 }
                 cx.notify();
                 handled = true;
@@ -376,6 +353,7 @@ impl Ashell {
                 }
             }
         }
+    }
 
     pub(crate) fn begin_terminal_selection(
         &mut self,
