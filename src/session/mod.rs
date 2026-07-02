@@ -601,6 +601,7 @@ impl Ashell {
         cx.notify();
     }
 
+    #[allow(dead_code)]
     pub(crate) fn show_new_group_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let name_input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("group_name")));
         let color_input = cx.new(|cx| InputState::new(window, cx).default_value("#6CB4EE".to_string()).placeholder(t!("group_color")));

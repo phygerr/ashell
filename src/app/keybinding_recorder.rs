@@ -1,6 +1,6 @@
 use gpui::{
     Action as _, App, Entity, IntoElement, KeyBinding, KeyDownEvent,
-    Keystroke, StatefulInteractiveElement as _, Unbind,
+    Keystroke, Unbind,
     div,
     prelude::*,
 };
