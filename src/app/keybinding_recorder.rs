@@ -1,5 +1,5 @@
 use gpui::{
-    Action as _, App, Entity, InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent,
+    Action as _, App, Entity, IntoElement, KeyBinding, KeyDownEvent,
     Keystroke, StatefulInteractiveElement as _, Unbind,
     div,
     prelude::*,
@@ -466,7 +466,8 @@ impl KeybindingsPage {
                                 .flex_1()
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground)
-                                .on_click(
+                                .on_mouse_down(
+                                    gpui::MouseButton::Left,
                                     {
                                         let view3 = view3.clone();
                                         move |_, window, cx| {
